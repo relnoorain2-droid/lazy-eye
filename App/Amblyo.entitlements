@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  v1.0 needs no entitlements beyond In-App Purchase, which requires none here.
+
+	  v1.1 additions (docs/02-PRD.md, F22-F24):
+	    com.apple.developer.healthkit          -> HealthKit
+	    com.apple.developer.icloud-services    -> CloudKit sync
+	    com.apple.security.application-groups  -> Watch companion
+
+	  Keep this file minimal. Every entitlement you add is another thing that can
+	  mismatch a provisioning profile on the CI runner.
+	-->
+</dict>
+</plist>

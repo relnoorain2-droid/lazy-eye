@@ -1,0 +1,5 @@
+app_identifier("com.amblyo.app")
+team_id("QAT93YWVSF")
+
+# No apple_id / itc_team_id here on purpose — authentication is via the App Store
+# Connect API key, which avoids 2FA prompts on CI entirely. See the Fastfile.

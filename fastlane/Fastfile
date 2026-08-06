@@ -1,0 +1,189 @@
+# Fastfile — Amblyo
+#
+# Runs on GitHub Actions macOS runners. Nothing here needs a local Mac.
+# docs/12-CICD-NO-MAC.md.
+
+default_platform(:ios)
+
+APP_ID  = "com.amblyo.app"
+SCHEME  = "Amblyo"
+TEAM_ID = "QAT93YWVSF"
+
+# Simulators used for tests. One small phone and one large iPad, because the
+# layout has to survive 320pt width and 13-inch split view, and neither of those
+# is checkable by eye from Windows.
+TEST_DEVICES = [
+  "iPhone 16",
+  "iPad Pro 13-inch (M4)"
+].freeze
+
+def asc_key
+  app_store_connect_api_key(
+    key_id:      ENV.fetch("ASC_KEY_ID"),
+    issuer_id:   ENV.fetch("ASC_ISSUER_ID"),
+    key_content: ENV.fetch("ASC_KEY_P8"),
+    in_house:    false
+  )
+end
+
+platform :ios do
+
+  # The .xcodeproj does not exist in the repo — it is generated from
+  # project.yml on every run. That is what keeps a Windows workflow sane.
+  before_all do
+    Dir.chdir("..") { sh("xcodegen generate") }
+  end
+
+  # ---------------------------------------------------------------------------
+
+  desc "Compile only. Fastest possible signal that the code is valid."
+  lane :build_check do
+    xcodebuild(
+      project: "Amblyo.xcodeproj",
+      scheme: SCHEME,
+      configuration: "Debug",
+      destination: "generic/platform=iOS Simulator",
+      xcargs: "CODE_SIGNING_ALLOWED=NO build"
+    )
+  end
+
+  desc "Build and run all tests. This is the CI lane."
+  lane :ci do
+    scan(
+      project: "Amblyo.xcodeproj",
+      scheme: SCHEME,
+      devices: TEST_DEVICES,
+      code_coverage: true,
+      result_bundle: true,
+      output_directory: "fastlane/test_output",
+      # Signing is irrelevant for simulator tests, and requiring it here would
+      # mean every pull request needed access to the match repo.
+      xcargs: "CODE_SIGNING_ALLOWED=NO",
+      fail_build: true
+    )
+  end
+
+  # ---------------------------------------------------------------------------
+
+  desc "ONE TIME ONLY: create the distribution certificate and profiles."
+  lane :bootstrap do
+    match(
+      type: "development",
+      app_identifier: APP_ID,
+      api_key: asc_key,
+      readonly: false,
+      force_for_new_devices: true
+    )
+    match(
+      type: "appstore",
+      app_identifier: APP_ID,
+      api_key: asc_key,
+      readonly: false
+    )
+    UI.success("Certificates and profiles created and pushed to the match repo.")
+    UI.important("Do not run this lane again unless certificates need regenerating.")
+  end
+
+  # ---------------------------------------------------------------------------
+
+  desc "Archive and upload to TestFlight."
+  lane :beta do
+    key = asc_key
+
+    match(type: "appstore", app_identifier: APP_ID, api_key: key, readonly: true)
+
+    # Build numbers must increase monotonically. Reading the latest from
+    # TestFlight rather than a local counter means a failed run never leaves a
+    # gap or a collision.
+    latest = latest_testflight_build_number(
+      api_key: key,
+      app_identifier: APP_ID,
+      initial_build_number: 0
+    )
+    increment_build_number(build_number: latest + 1, xcodeproj: "Amblyo.xcodeproj")
+
+    gym(
+      project: "Amblyo.xcodeproj",
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build",
+      output_name: "Amblyo.ipa",
+      export_options: {
+        provisioningProfiles: { APP_ID => "match AppStore #{APP_ID}" },
+        teamID: TEAM_ID,
+        uploadSymbols: true
+      }
+    )
+
+    changelog = if File.exist?("../CHANGELOG_LATEST.md")
+                  File.read("../CHANGELOG_LATEST.md")
+                else
+                  "Internal build."
+                end
+
+    pilot(
+      api_key: key,
+      app_identifier: APP_ID,
+      skip_waiting_for_build_processing: true,
+      distribute_external: false,
+      changelog: changelog
+    )
+
+    UI.success("Uploaded build #{latest + 1} to TestFlight.")
+  end
+
+  # ---------------------------------------------------------------------------
+
+  desc "Capture App Store screenshots on the simulator."
+  lane :screenshots do
+    snapshot(
+      project: "Amblyo.xcodeproj",
+      scheme: "AmblyoUITests",
+      clear_previous_screenshots: true,
+      output_directory: "fastlane/screenshots"
+    )
+    UI.important("Now run: python3 scripts/make_screenshots.py to frame and caption them.")
+  end
+
+  # ---------------------------------------------------------------------------
+
+  desc "Push metadata and screenshots, then submit for review."
+  lane :release do
+    key = asc_key
+
+    deliver(
+      api_key: key,
+      app_identifier: APP_ID,
+      submit_for_review: true,
+      automatic_release: false,
+      force: true,                          # skip the interactive HTML preview
+      skip_binary_upload: true,             # the binary went up via `beta`
+      precheck_include_in_app_purchases: true,
+      submission_information: {
+        add_id_info_uses_idfa: false,
+        export_compliance_uses_encryption: false,
+        content_rights_contains_third_party_content: false
+      }
+    )
+  end
+
+  desc "Dry run: validate metadata without submitting anything."
+  lane :check_metadata do
+    deliver(
+      api_key: asc_key,
+      app_identifier: APP_ID,
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      force: false,
+      submit_for_review: false
+    )
+  end
+
+  # ---------------------------------------------------------------------------
+
+  error do |lane, exception|
+    UI.error("Lane #{lane} failed: #{exception.message}")
+    UI.important("Signing problems? See docs/12-CICD-NO-MAC.md section 6.")
+  end
+end

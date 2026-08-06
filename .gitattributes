@@ -1,0 +1,47 @@
+# Normalise line endings.
+#
+# You commit from Windows; CI builds on macOS. Without this, Git would store
+# CRLF and the runner would see stray carriage returns — which breaks shell
+# steps in workflows and produces confusing "command not found" errors that
+# have nothing to do with your code.
+#
+# Everything is stored as LF in the repo. Git still checks out what your
+# editor expects locally.
+
+* text=auto eol=lf
+
+# Explicitly text
+*.swift    text eol=lf
+*.md       text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.json     text eol=lf
+*.plist    text eol=lf
+*.xcprivacy text eol=lf
+*.entitlements text eol=lf
+*.storekit text eol=lf
+*.py       text eol=lf
+*.rb       text eol=lf
+*.sh       text eol=lf eol=lf
+Gemfile    text eol=lf
+Fastfile   text eol=lf
+Appfile    text eol=lf
+Matchfile  text eol=lf
+.gitignore text eol=lf
+
+# PowerShell scripts run on Windows and prefer CRLF
+*.ps1      text eol=crlf
+
+# Binary — never touch
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.pdf      binary
+*.ipa      binary
+*.p8       binary
+*.p12      binary
+*.mobileprovision binary
+
+# Keep diffs readable in pull requests
+*.md       diff=markdown
+*.swift    diff=swift

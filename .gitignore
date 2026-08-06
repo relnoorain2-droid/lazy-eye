@@ -1,0 +1,47 @@
+# Generated project — never commit, it is built from project.yml
+*.xcodeproj
+*.xcworkspace
+!*.xcworkspace/contents.xcworkspacedata
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+*.xcscmblueprint
+build/
+.swiftpm/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output/
+fastlane/screenshots/**/*.png
+fastlane/screenshots/screenshots.html
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Signing — must never be committed
+*.mobileprovision
+*.p12
+*.cer
+*.p8
+AuthKey_*.p8
+
+# Ruby
+.bundle/
+vendor/bundle/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local secrets
+.env
+.env.local

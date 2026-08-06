@@ -1,0 +1,70 @@
+name: Release to TestFlight
+
+# Triggered by pushing a version tag, or manually.
+#
+#   git tag v1.0.0 && git push origin v1.0.0
+#
+# Tests run first. A build that fails its tests must never reach a tester's
+# device — especially on a health app where the tester may be a child.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_AUTH }}
+      FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: '120'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compliance lint
+        run: python3 scripts/lint_claims.py
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Run tests before shipping
+        run: bundle exec fastlane ci
+
+      - name: Archive and upload to TestFlight
+        run: bundle exec fastlane beta
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            build/*.ipa
+            build/*.app.dSYM.zip
+          retention-days: 14
+          if-no-files-found: ignore

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Amblyo</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+
+	<!-- Export compliance. We use no non-exempt encryption; declaring this here
+	     avoids the "Missing Compliance" state on every TestFlight build.
+	     docs/12-CICD-NO-MAC.md section 6. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+	</dict>
+
+	<key>MinimumOSVersion</key>
+	<string>17.0</string>
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>SurfaceBase</string>
+	</dict>
+
+	<!-- iPad: all four orientations. iPhone: portrait + both landscape.
+	     Landscape matters for wide-field stimuli.
+	     docs/05-DESIGN-SYSTEM.md section 6. -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- Stage Manager / multi-window. Exercises pause when the window is not
+	     key — psychophysical data from a background window is invalid. -->
+	<key>UIRequiresFullScreen</key>
+	<false/>
+
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleDefault</string>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+
+	<!-- 120 Hz on ProMotion. Required for timing-critical stimuli; without it
+	     CADisplayLink is capped at 60 Hz. -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+
+	<!-- HealthKit (v1.1, F22). Kept here so the strings are reviewed once and
+	     the capability flip in project.yml is the only change needed.
+	     docs/06-AI-ENGINE-SPEC.md section 5. -->
+	<key>NSHealthShareUsageDescription</key>
+	<string>Amblyo can read your glasses or contact lens prescription from the Health app to help set up your training. This stays on your device and is never shared.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Amblyo can record the time you spend in a training session as mindful minutes in the Health app. This stays on your device and is never shared.</string>
+
+	<!-- Localisation -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+	</array>
+</dict>
+</plist>
