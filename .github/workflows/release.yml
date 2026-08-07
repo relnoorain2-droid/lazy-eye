@@ -33,7 +33,9 @@ jobs:
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
       MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
       MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
-      MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_AUTH }}
+      # MATCH_GIT_BASIC_AUTHORIZATION is set by the preflight step below,
+      # after it has been normalised and verified. Do NOT set it here too -
+      # a job-level env var would win over what the step writes to GITHUB_ENV.
       FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: '120'
 
     steps:
@@ -49,6 +51,67 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
+
+      # Release #1 died here with a cryptic fastlane message:
+      #   "Error cloning certificates git repo"
+      #   "fatal: could not read Username for '': terminal prompts disabled"
+      #
+      # MATCH_GIT_BASIC_AUTHORIZATION must be base64("user:token"), and hand-
+      # encoding it is the single most error-prone step in the whole setup —
+      # a trailing newline, a missing username, or encoding only the token all
+      # produce that same unhelpful error.
+      #
+      # So: normalise it here instead of trusting the format, and prove the
+      # clone works BEFORE fastlane runs. A precise failure now beats a vague
+      # one fifteen minutes into a build.
+      - name: Normalise and verify certificates repo access
+        env:
+          RAW_AUTH: ${{ secrets.MATCH_GIT_AUTH }}
+          CERTS_URL: ${{ secrets.MATCH_GIT_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${RAW_AUTH}" ]; then
+            echo "::error::MATCH_GIT_AUTH is empty. Add it in Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          if [ -z "${CERTS_URL}" ]; then
+            echo "::error::MATCH_GIT_URL is empty."
+            exit 1
+          fi
+
+          # Strip any whitespace/newlines a copy-paste may have introduced.
+          CLEAN=$(printf '%s' "${RAW_AUTH}" | tr -d '[:space:]')
+
+          # Does it decode to "something:something"? If yes it is already the
+          # base64 form match expects. If not, assume it is a raw PAT and
+          # encode it ourselves with a username. Either input now works.
+          if DECODED=$(printf '%s' "${CLEAN}" | base64 --decode 2>/dev/null) \
+             && printf '%s' "${DECODED}" | grep -q ':'; then
+            echo "MATCH_GIT_AUTH looks like base64(user:token) - using as-is."
+            AUTH="${CLEAN}"
+          else
+            echo "MATCH_GIT_AUTH does not decode to user:token - treating it as a raw token and encoding it."
+            AUTH=$(printf '%s' "x-access-token:${CLEAN}" | base64 | tr -d '\n')
+          fi
+
+          echo "::add-mask::${AUTH}"
+          echo "MATCH_GIT_BASIC_AUTHORIZATION=${AUTH}" >> "$GITHUB_ENV"
+
+          # Prove it actually works, with a real clone into a temp dir.
+          echo "Testing clone of ${CERTS_URL} ..."
+          if git -c http.extraHeader="Authorization: Basic ${AUTH}" \
+                 ls-remote "${CERTS_URL}" >/dev/null 2>&1; then
+            echo "Certificates repo is reachable."
+          else
+            echo "::error::Cannot access the certificates repo."
+            echo "Check, in this order:"
+            echo "  1. The token has 'Contents: Read and write' on amblyo-certificates"
+            echo "  2. The token has not expired"
+            echo "  3. MATCH_GIT_URL is exactly https://github.com/relnoorain2-droid/amblyo-certificates"
+            echo "  4. If you used a fine-grained token, it must list amblyo-certificates under 'Only select repositories'"
+            exit 1
+          fi
 
       - uses: ruby/setup-ruby@v1
         with:
