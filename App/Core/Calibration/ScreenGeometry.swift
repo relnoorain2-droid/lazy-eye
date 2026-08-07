@@ -64,8 +64,15 @@ enum ScreenGeometry {
     }
 
     // MARK: - Public API
+    //
+    // CONCURRENCY NOTE: everything that touches UIScreen or UIDevice is
+    // @MainActor, because those are main-actor-isolated in Swift 6. The pure
+    // maths below (the device table, points-per-cm conversion, the card check)
+    // is deliberately NOT isolated, so it stays unit-testable without a main
+    // actor hop — which is most of what the tests exercise.
 
     /// Best available density for the current device.
+    @MainActor
     static func currentDensity() -> Density {
         let id = deviceIdentifier()
         if let ppi = exactTable[id] {
@@ -79,11 +86,13 @@ enum ScreenGeometry {
 
     /// Points per centimetre for the current device, ready to store in a
     /// `CalibrationProfile`.
+    @MainActor
     static func currentPointsPerCM() -> Double {
         currentDensity().pointsPerCM(scale: displayScale())
     }
 
     /// True when we are guessing and should nudge the user to verify.
+    @MainActor
     static var shouldPromptCardCheck: Bool {
         switch currentDensity().confidence {
         case .exact: false
@@ -137,6 +146,7 @@ enum ScreenGeometry {
         }
     }
 
+    @MainActor
     static func displayScale() -> Double {
         #if canImport(UIKit)
         let scale = UIScreen.main.scale
@@ -150,6 +160,7 @@ enum ScreenGeometry {
     //
     // Covers every device Apple has not shipped yet, which is the important case.
 
+    @MainActor
     private static func inferred(from identifier: String) -> Double? {
         if identifier.hasPrefix("iPad") {
             // Every iPad mini is 326 ppi; every other iPad is 264 ppi. This has
@@ -169,6 +180,7 @@ enum ScreenGeometry {
 
     /// iPad mini generations, by identifier family.
     /// mini 5 = iPad11,1-2 · mini 6 = iPad14,1-2 · mini 7 (A17 Pro) = iPad16,1-2
+    @MainActor
     private static func isIPadMini(_ identifier: String) -> Bool {
         if knownMiniIdentifiers.contains(identifier) { return true }
         // Future minis: fall back to physical pixel count. Every mini to date is
@@ -192,6 +204,7 @@ enum ScreenGeometry {
 
     /// Last resort. 264 ppi (iPad) or 460 ppi (iPhone) is closer to right than
     /// anything else we could pick, and the card check corrects it.
+    @MainActor
     private static func fallbackPPI() -> Double {
         #if canImport(UIKit)
         return UIDevice.current.userInterfaceIdiom == .pad ? 264 : 460
@@ -301,6 +314,7 @@ extension ScreenGeometry {
 
     /// A sensible starting distance for this device. The user can adjust it, and
     /// whatever they choose is what the maths uses — this is only the default.
+    @MainActor
     static func suggestedViewingDistanceCM() -> Double {
         #if canImport(UIKit)
         switch UIDevice.current.userInterfaceIdiom {

@@ -23,6 +23,87 @@ codebase, and Phase 5 onwards is where the volume is.
 
 ---
 
+## How a build actually reaches TestFlight
+
+Worth reading once, so the six secrets stop looking like arbitrary hoops.
+
+**You cannot upload to TestFlight without keys.** Apple requires two things that
+cannot be skipped or substituted:
+
+1. **The app must be signed** with a distribution certificate Apple issued to
+   your account. An unsigned `.ipa` is rejected at upload.
+2. **The upload must be authenticated** as you.
+
+The six secrets are just those two facts, stored somewhere the runner can reach.
+
+### What happens when you push a tag
+
+```
+  You:  git tag v1.0.0 && git push origin v1.0.0
+    |
+    v
+  1. GitHub starts a fresh macOS virtual machine
+     (empty - no Xcode project, no certificates, nothing of yours)
+    |
+    v
+  2. Checks out your code
+    |
+    v
+  3. xcodegen reads project.yml -> generates Amblyo.xcodeproj
+     (this is why you never need to open Xcode)
+    |
+    v
+  4. fastlane match clones your PRIVATE certificates repo,
+     decrypts it with MATCH_PASSWORD,
+     installs the certificate into the VM's temporary keychain
+     ---> this is the "prove the app is really from you" half
+    |
+    v
+  5. xcodebuild compiles Swift -> signs the binary with that certificate
+    |
+    v
+  6. The signed .ipa is uploaded to App Store Connect,
+     authenticated with your .p8 API key
+     ---> this is the "prove YOU are uploading it" half
+    |
+    v
+  7. Apple processes the build (5-15 minutes)
+    |
+    v
+  8. It appears in TestFlight on your iPhone
+    |
+    v
+  9. The VM is destroyed. Certificates and keys vanish with it.
+```
+
+Step 9 is why this is safe: nothing persists on the runner. Each build fetches
+what it needs and takes it to the grave.
+
+### Which secret does what
+
+| Secret | Answers the question |
+|---|---|
+| `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` | "Who are you?" - authenticates the upload |
+| `MATCH_GIT_URL`, `MATCH_GIT_AUTH` | "Where are your certificates kept?" |
+| `MATCH_PASSWORD` | "Prove you can decrypt them" |
+
+### Alternatives, and why they were rejected
+
+| Approach | Verdict |
+|---|---|
+| **Xcode Cloud** - Apple manages signing entirely, no keys to handle | **Not possible for you.** Creating a workflow requires Xcode; App Store Connect only manages workflows that already exist. Nothing to run it from on Windows. |
+| **fastlane `cert` + `sigh`** - creates certificates on the fly, only needs the API key | Tempting, but a fresh CI runner has no private key, so it creates a **new certificate every build**. Apple allows only 2-3 distribution certificates, and you would exhaust them in a week - invalidating builds already in TestFlight. |
+| **Manual `.p12` export** - export once, store as a secret | Works, but exporting a `.p12` requires Keychain Access, which requires a Mac. |
+| **fastlane `match`** | **Chosen.** One-time setup, then every build just decrypts. Never creates a second certificate. |
+
+### It is less work than it sounds
+
+Three of the six secrets come from one page in App Store Connect (about
+3 minutes). Two come from creating an empty repo and a token (about 5 minutes).
+One you invent yourself. Then you never touch any of it again.
+
+---
+
 ## Step 1 — Create the GitHub repo
 
 1. Create a **private** repo, e.g. `amblyo`.

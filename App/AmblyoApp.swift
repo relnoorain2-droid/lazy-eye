@@ -117,8 +117,13 @@ struct MainTabView: View {
     var body: some View {
         if sizeClass == .regular {
             NavigationSplitView {
-                List(Tab.allCases, selection: $selection) { tab in
-                    Label(tab.title, systemImage: tab.systemImage).tag(tab)
+                // `List(data, selection:rowContent:)` is macOS-only. On iOS the
+                // selection-capable form is `List(selection:)` with a ForEach
+                // inside, and each row tagged.
+                List(selection: $selection) {
+                    ForEach(Tab.allCases) { tab in
+                        Label(tab.title, systemImage: tab.systemImage).tag(tab)
+                    }
                 }
                 .navigationTitle("Amblyo")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)

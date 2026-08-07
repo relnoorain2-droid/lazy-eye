@@ -266,7 +266,7 @@ struct PreferencesBlob: Codable, Sendable, Equatable {
     }
 
     // Tolerant decoding: any field missing from an older store takes its default.
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         preferredSessionSeconds = try c.decodeIfPresent(Int.self, forKey: .preferredSessionSeconds)
         reminderEnabled = try c.decodeIfPresent(Bool.self, forKey: .reminderEnabled) ?? false

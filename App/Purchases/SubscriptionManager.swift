@@ -56,7 +56,19 @@ final class SubscriptionManager {
         await refreshEntitlements()
     }
 
-    deinit { updatesTask?.cancel() }
+    // NO deinit HERE, deliberately.
+    //
+    // `deinit` is nonisolated in Swift 6, so it cannot touch `updatesTask`,
+    // which is @MainActor-isolated. The compiler is right to reject it.
+    //
+    // Cancelling is also unnecessary: this object is owned by the App struct
+    // and lives exactly as long as the process. If it is ever deinitialised,
+    // the app is terminating and the task dies with it. If a future refactor
+    // gives this a shorter lifetime, call `stop()` explicitly.
+    func stop() {
+        updatesTask?.cancel()
+        updatesTask = nil
+    }
 
     func loadProducts() async {
         do {
