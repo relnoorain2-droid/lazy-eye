@@ -17,6 +17,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      run_tests:
+        description: 'Re-run the full test suite first (slow; CI already tested this commit)'
+        type: boolean
+        default: false
 
 concurrency:
   group: release
@@ -98,20 +103,56 @@ jobs:
           echo "::add-mask::${AUTH}"
           echo "MATCH_GIT_BASIC_AUTHORIZATION=${AUTH}" >> "$GITHUB_ENV"
 
-          # Prove it actually works, with a real clone into a temp dir.
-          echo "Testing clone of ${CERTS_URL} ..."
-          if git -c http.extraHeader="Authorization: Basic ${AUTH}" \
-                 ls-remote "${CERTS_URL}" >/dev/null 2>&1; then
-            echo "Certificates repo is reachable."
-          else
-            echo "::error::Cannot access the certificates repo."
-            echo "Check, in this order:"
-            echo "  1. The token has 'Contents: Read and write' on amblyo-certificates"
-            echo "  2. The token has not expired"
-            echo "  3. MATCH_GIT_URL is exactly https://github.com/relnoorain2-droid/amblyo-certificates"
-            echo "  4. If you used a fine-grained token, it must list amblyo-certificates under 'Only select repositories'"
-            exit 1
-          fi
+          # Report the USERNAME half (safe to print) so a wrong username is
+          # obvious. The token half is never printed.
+          USER_PART=$(printf '%s' "${DECODED:-}" | cut -d: -f1)
+          TOKEN_PART=$(printf '%s' "${DECODED:-}" | cut -d: -f2-)
+          echo "Username in MATCH_GIT_AUTH : '${USER_PART}'"
+          echo "Token length               : ${#TOKEN_PART} characters"
+          case "${TOKEN_PART}" in
+            github_pat_*) echo "Token type                 : fine-grained PAT" ;;
+            ghp_*)        echo "Token type                 : classic PAT" ;;
+            gho_*|ghs_*)  echo "Token type                 : OAuth/app token (unlikely to work here)" ;;
+            *)            echo "Token type                 : UNRECOGNISED - this is probably the problem" ;;
+          esac
+
+          # Ask the GitHub API directly. It distinguishes the failure modes that
+          # `git ls-remote` collapses into one unhelpful message.
+          REPO_PATH=$(printf '%s' "${CERTS_URL}" | sed -E 's#.*github\.com/##; s#\.git$##')
+          echo "Checking API access to ${REPO_PATH} ..."
+          STATUS=$(curl -s -o /tmp/api.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${TOKEN_PART}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO_PATH}" || echo "000")
+
+          echo "GitHub API responded: ${STATUS}"
+          case "${STATUS}" in
+            200)
+              PERMS=$(python3 -c "import json;d=json.load(open('/tmp/api.json'));print(d.get('permissions',{}))" 2>/dev/null || echo "?")
+              echo "Repo found. Permissions: ${PERMS}"
+              if git -c http.extraHeader="Authorization: Basic ${AUTH}" \
+                     ls-remote "${CERTS_URL}" >/dev/null 2>&1; then
+                echo "Certificates repo is reachable. Proceeding."
+              else
+                echo "::error::API sees the repo but git cannot clone it. The token likely lacks 'Contents: Read and write'."
+                exit 1
+              fi
+              ;;
+            401)
+              echo "::error::401 Unauthorized - the token is invalid, revoked, or expired. Generate a new one."
+              exit 1 ;;
+            403)
+              echo "::error::403 Forbidden - the token is valid but not permitted on this repo. For a fine-grained token, edit it and add amblyo-certificates under 'Only select repositories', with Contents: Read and write."
+              exit 1 ;;
+            404)
+              echo "::error::404 Not Found - either the repo path is wrong, or (more likely) the fine-grained token does not have amblyo-certificates selected. GitHub returns 404 rather than 403 for repos a token cannot see."
+              echo "Repo path derived from MATCH_GIT_URL: '${REPO_PATH}'"
+              echo "It should be exactly: relnoorain2-droid/amblyo-certificates"
+              exit 1 ;;
+            *)
+              echo "::error::Unexpected response ${STATUS} from the GitHub API."
+              exit 1 ;;
+          esac
 
       - uses: ruby/setup-ruby@v1
         with:
@@ -121,7 +162,16 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Run tests before shipping
+      # WHY THIS IS OFF BY DEFAULT:
+      # ci.yml already builds and runs the full suite on every push to main, so
+      # by the time you release, this exact commit has been tested. Running it
+      # again cost ~15 minutes of macOS quota per release attempt and made every
+      # signing retry painfully slow.
+      #
+      # Set "run_tests" to true when dispatching if you want the belt-and-braces
+      # run — e.g. releasing a commit that never went through CI.
+      - name: Run tests before shipping (optional)
+        if: ${{ inputs.run_tests == true }}
         run: bundle exec fastlane ci
 
       - name: Archive and upload to TestFlight
