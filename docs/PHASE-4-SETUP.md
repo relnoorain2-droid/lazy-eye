@@ -1,7 +1,38 @@
 # PHASE 4 — CI SETUP CHECKLIST
 
-Everything on your side, in order. Browser only — no Mac needed at any point.
-Budget about **an hour**, most of it waiting.
+Browser only — no Mac needed at any point.
+
+---
+
+## ✅ ALREADY DONE (2026-08-06)
+
+| Item | Status | Value |
+|---|---|---|
+| GitHub repo | ✅ | `relnoorain2-droid/lazy-eye` (public for now) |
+| Certificates repo | ✅ | `relnoorain2-droid/amblyo-certificates` — **private, empty** |
+| App Store Connect record | ✅ | Amblyo: Lazy Eye Training, **App ID `6799099606`** |
+| Bundle ID | ✅ | `com.amblyo.app` |
+| Team ID | ✅ | `QAT93YWVSF` |
+| **Paid Apps Agreement** | ✅ **Active** | The #1 StoreKit gotcha — already handled |
+| Bank account + tax forms | ✅ Active | |
+| API key | ✅ | Name **Amblyo CI**, **Key ID `A648X8UC93`**, Admin role |
+| Issuer ID | ✅ | `8bbf6004-0e8e-4ec0-8475-4020300bd459` |
+| `.p8` file | ✅ Downloaded | In your Downloads folder — **cannot be re-downloaded** |
+| First CI run | ✅ | Compliance lint **passed**; 2 compile errors found and fixed |
+
+## ⬜ STILL TO DO — the four credential moments
+
+These are the only steps deliberately left to you, because they involve pasting
+private keys and tokens.
+
+1. **GitHub PAT** for the certificates repo (§2 below)
+2. **Six GitHub Secrets** (§4 below) — three values are already known, listed there
+3. **Invent `MATCH_PASSWORD`** and save it in your password manager FIRST
+4. **Run the bootstrap workflow** once (§7)
+
+Then tag a release and the app lands in TestFlight.
+
+---
 
 **All the code is written.** These steps connect it to your Apple and GitHub
 accounts.
@@ -166,14 +197,24 @@ Keep that base64 string — it becomes `MATCH_GIT_AUTH`.
 
 In your `amblyo` repo: **Settings → Secrets and variables → Actions → New repository secret.**
 
+**Copy these exactly.** Three of the six values are already known:
+
 | Secret | Value |
 |---|---|
-| `ASC_KEY_ID` | The 10-character Key ID from step 3 |
-| `ASC_ISSUER_ID` | The Issuer ID UUID from step 3 |
-| `ASC_KEY_P8` | **The entire contents** of the `.p8` file, including the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines. Open it in Notepad and copy everything. |
-| `MATCH_PASSWORD` | A long random passphrase you invent. **Save it in your password manager — without it your certificates are unrecoverable.** |
-| `MATCH_GIT_URL` | `https://github.com/YOUR_USER/amblyo-certificates` |
+| `ASC_KEY_ID` | **`A648X8UC93`** ← ready to paste |
+| `ASC_ISSUER_ID` | **`8bbf6004-0e8e-4ec0-8475-4020300bd459`** ← ready to paste |
+| `MATCH_GIT_URL` | **`https://github.com/relnoorain2-droid/amblyo-certificates`** ← ready to paste |
+| `ASC_KEY_P8` | Open `AuthKey_A648X8UC93.p8` from your Downloads folder in **Notepad** and copy **everything**, including the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines. A truncated paste is the most common cause of "Authentication credentials are missing or invalid". |
+| `MATCH_PASSWORD` | A long random passphrase you invent. **Put it in your password manager BEFORE pasting it here** — without it your certificates cannot be decrypted, ever. |
 | `MATCH_GIT_AUTH` | The base64 string from step 2 |
+
+Direct link to add them:
+`https://github.com/relnoorain2-droid/lazy-eye/settings/secrets/actions`
+
+⚠️ **The repo is currently public.** GitHub Secrets are still hidden from the
+public and are never exposed to pull requests from forks, so this is safe — but
+if you make the repo private later, the secrets carry over unchanged. Nothing to
+redo.
 
 ---
 

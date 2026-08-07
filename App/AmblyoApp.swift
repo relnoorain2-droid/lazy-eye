@@ -114,19 +114,30 @@ struct MainTabView: View {
         }
     }
 
+    /// iOS's `List(selection:)` takes an OPTIONAL binding. Passing a
+    /// non-optional `Binding<Tab>` makes Swift resolve to a macOS-only overload
+    /// and fail with "unavailable in iOS" — which is a confusing way to report
+    /// a type mismatch. This bridges the two, and refuses to go nil so the
+    /// detail pane always has something to show.
+    private var sidebarSelection: Binding<Tab?> {
+        Binding(
+            get: { selection },
+            set: { newValue in if let newValue { selection = newValue } }
+        )
+    }
+
     var body: some View {
         if sizeClass == .regular {
             NavigationSplitView {
-                // `List(data, selection:rowContent:)` is macOS-only. On iOS the
-                // selection-capable form is `List(selection:)` with a ForEach
-                // inside, and each row tagged.
-                List(selection: $selection) {
+                List(selection: sidebarSelection) {
                     ForEach(Tab.allCases) { tab in
                         Label(tab.title, systemImage: tab.systemImage).tag(tab)
                     }
                 }
                 .navigationTitle("Amblyo")
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
+                .navigationSplitViewColumnWidth(min: Layout.sidebarMin,
+                                                ideal: Layout.sidebarIdeal,
+                                                max: Layout.sidebarMax)
             } detail: {
                 NavigationStack { destination(for: selection) }
             }
