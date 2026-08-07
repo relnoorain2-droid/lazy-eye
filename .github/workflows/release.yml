@@ -7,6 +7,12 @@ name: Release to TestFlight
 # Tests run first. A build that fails its tests must never reach a tester's
 # device — especially on a health app where the tester may be a child.
 
+# Two ways to trigger, both one action:
+#   1. Push a version tag:  git tag v1.0.0 && git push origin v1.0.0
+#   2. Actions tab -> Release to TestFlight -> Run workflow  (no git needed)
+#
+# The beta lane is self-bootstrapping, so there is NO separate signing step.
+# The first run creates the certificates; every run after reuses them.
 on:
   push:
     tags: ['v*']

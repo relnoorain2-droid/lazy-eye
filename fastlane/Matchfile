@@ -13,4 +13,6 @@ team_id("QAT93YWVSF")
 
 # Never let CI silently create new certificates. A runaway `match` can burn
 # through your certificate limit and invalidate builds already in TestFlight.
+# The beta lane overrides this with readonly:false so it can self-bootstrap
+# on the very first release. This default protects every other code path.
 readonly(true)

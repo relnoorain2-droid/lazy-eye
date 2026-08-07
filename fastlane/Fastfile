@@ -94,11 +94,29 @@ platform :ios do
 
   # ---------------------------------------------------------------------------
 
-  desc "Archive and upload to TestFlight."
+  desc "Archive and upload to TestFlight. Creates signing assets on first run."
   lane :beta do
     key = asc_key
 
-    match(type: "appstore", app_identifier: APP_ID, api_key: key, readonly: true)
+    # readonly: false means this lane is SELF-BOOTSTRAPPING.
+    #
+    # If the certificates repo is empty, match creates the certificate and
+    # profile and commits them. If they already exist, match just decrypts and
+    # uses them — it does NOT create duplicates. So the separate "run bootstrap
+    # once" step is unnecessary: the first `beta` run does it, every later run
+    # reuses it.
+    #
+    # `force: false` is the important guard. match will never revoke an
+    # existing Apple certificate to make room for a new one. If the account is
+    # at Apple's distribution-certificate limit it fails loudly instead of
+    # quietly breaking another app's signing.
+    match(
+      type: "appstore",
+      app_identifier: APP_ID,
+      api_key: key,
+      readonly: false,
+      force: false
+    )
 
     # Build numbers must increase monotonically. Reading the latest from
     # TestFlight rather than a local counter means a failed run never leaves a
