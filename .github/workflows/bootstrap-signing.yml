@@ -41,6 +41,12 @@ jobs:
           ruby-version: '3.3'
           bundler-cache: true
 
+      # The bootstrap lane skips project generation (see the Fastfile), so this
+      # is belt-and-braces only — it costs ~10s and removes a whole class of
+      # "works in CI, not here" difference between the workflows.
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
       - name: Create certificates and profiles
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}

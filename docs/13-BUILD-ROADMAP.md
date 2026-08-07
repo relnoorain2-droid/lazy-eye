@@ -120,6 +120,25 @@ VoiceOver navigates the whole flow; layout correct at 320 pt and on iPad 13" in 
 
 ---
 
+## ☑ PHASE 4 — CI GREEN — **BUILD + TESTS PASSING 2026-08-07**
+
+**CI #4 completed successfully.** Compile clean, zero warnings, all unit tests
+passing on both iPhone 16 and iPad Pro 13-inch, compliance lint passing.
+
+Took four rounds, all of them my bugs, none of them the app's:
+
+| Run | Result |
+|---|---|
+| #1 | 2 compile errors + 8 concurrency warnings |
+| #2 | 1 error — my first fix was wrong |
+| #3 | Compile clean, all unit tests pass, iPad UI smoke test failed (bad assertion) |
+| #4 | ✅ **Green** |
+
+**Still outstanding before TestFlight:** `MATCH_PASSWORD` and `MATCH_GIT_AUTH`
+secrets, then the one-time Bootstrap Signing run. See `PHASE-4-SETUP.md`.
+
+<details><summary>original phase brief</summary>
+
 ## ☐ PHASE 4 — [RESEARCH-GATE] CI green
 
 **Entry state:** Phase 3. **Do this now, not later.**
@@ -134,6 +153,7 @@ VoiceOver navigates the whole flow; layout correct at 320 pt and on iPad 13" in 
 
 **Done when:** you are holding your iPad running your own build, installed via TestFlight, having never
 touched a Mac.
+</details>
 
 ---
 

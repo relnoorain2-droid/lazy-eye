@@ -29,8 +29,16 @@ end
 platform :ios do
 
   # The .xcodeproj does not exist in the repo — it is generated from
-  # project.yml on every run. That is what keeps a Windows workflow sane.
-  before_all do
+  # project.yml. That is what keeps a Windows workflow sane.
+  #
+  # But NOT every lane needs it. `bootstrap` only talks to Apple and to the
+  # certificates git repo; it never opens the project. Generating one there
+  # just adds a XcodeGen dependency to a workflow that has no reason to
+  # install it — which is exactly how Bootstrap Signing #1 failed.
+  LANES_WITHOUT_PROJECT = [:bootstrap].freeze
+
+  before_all do |lane, _options|
+    next if LANES_WITHOUT_PROJECT.include?(lane)
     Dir.chdir("..") { sh("xcodegen generate") }
   end
 
