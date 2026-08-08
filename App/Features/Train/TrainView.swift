@@ -240,6 +240,21 @@ struct TrainView: View {
             case FindItExercise.descriptor.id:
                 FindItView(runner: runner,
                            calibration: calibration) { _ in endSession() }
+            case SmoothPursuitExercise.descriptor.id:
+                SmoothPursuitView(runner: runner,
+                                  calibration: calibration) { _ in endSession() }
+            case JumpTargetsExercise.descriptor.id:
+                JumpTargetsView(runner: runner,
+                                calibration: calibration) { _ in endSession() }
+            case HartChartExercise.descriptor.id:
+                HartChartView(runner: runner,
+                              calibration: calibration) { _ in endSession() }
+            case PathTracerExercise.descriptor.id:
+                PathTracerView(runner: runner,
+                               calibration: calibration) { _ in endSession() }
+            case ReadingLadderExercise.descriptor.id:
+                ReadingLadderView(runner: runner,
+                                  calibration: calibration) { _ in endSession() }
             default:
                 GaborOrientationView(runner: runner,
                                      calibration: calibration) { _ in endSession() }

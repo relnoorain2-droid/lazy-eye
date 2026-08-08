@@ -176,7 +176,7 @@ simulated observer within ±10%; the fatigue button ends the session in one tap 
 
 ---
 
-## ☐ PHASE 6 — Monocular pack (14 exercises)
+## ☑ PHASE 6 — Monocular pack (14 exercises) — **DONE 2026-08-08**
 
 **Entry state:** Phase 5.
 **Required reading:** `03-EXERCISE-CATALOG.md` Pack 1.
