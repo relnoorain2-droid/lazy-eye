@@ -103,8 +103,21 @@ jobs:
             AUTH=$(printf '%s' "x-access-token:${CLEAN}" | base64 | tr -d '\n')
           fi
 
+          # NOTE: MATCH_GIT_BASIC_AUTHORIZATION is deliberately NOT exported.
+          #
+          # match applies it as `-c http.extraheader='Authorization: Basic ...'`,
+          # and that header OVERRIDES any credentials in the clone URL. Every
+          # previous attempt failed with:
+          #   remote: Invalid username or token. Password authentication is not
+          #           supported for Git operations.
+          # even though the same token authenticates fine against the REST API
+          # and has "Read and Write access to code" on the repo.
+          #
+          # An earlier attempt embedded the token in the URL but left this
+          # header set, so the header still won and nothing changed. This time
+          # the header is dropped entirely and only the URL carries credentials,
+          # which git handles natively.
           echo "::add-mask::${AUTH}"
-          echo "MATCH_GIT_BASIC_AUTHORIZATION=${AUTH}" >> "$GITHUB_ENV"
 
           # Report the USERNAME half (safe to print) so a wrong username is
           # obvious. The token half is never printed.
@@ -132,21 +145,66 @@ jobs:
           case "${STATUS}" in
             200)
               PERMS=$(python3 -c "import json;d=json.load(open('/tmp/api.json'));print(d.get('permissions',{}))" 2>/dev/null || echo "?")
-              echo "Repo found. Permissions: ${PERMS}"
-              echo "Token is valid and authorised."
+              echo "Repo visible. Collaborator permissions: ${PERMS}"
 
-              # Hand match a URL with the token already embedded, rather than
-              # relying on an Authorization header that match must apply itself.
+              # DO NOT TRUST THE LINE ABOVE AS PROOF OF ACCESS.
               #
-              # This is the most robust form: git handles credentials-in-URL
-              # natively - no header plumbing, no dependency on match's internal
-              # clone implementation. The header variable is still exported
-              # above as a fallback.
-              echo "::add-mask::${TOKEN_PART}"
-              AUTH_URL="https://x-access-token:${TOKEN_PART}@github.com/${REPO_PATH}.git"
-              echo "::add-mask::${AUTH_URL}"
-              echo "MATCH_GIT_URL=${AUTH_URL}" >> "$GITHUB_ENV"
-              echo "MATCH_GIT_URL set to an authenticated clone URL for ${REPO_PATH}"
+              # GET /repos/{owner}/{repo} succeeds with only "Metadata: Read",
+              # and the `permissions` block it returns describes what the USER
+              # can do on the repo - not what this TOKEN is permitted to do.
+              # A fine-grained PAT with Metadata-only will happily return 200
+              # here and then fail every git operation with
+              #   "Invalid username or token. Password authentication is not
+              #    supported for Git operations."
+              # which is what wasted several release attempts.
+              #
+              # Cloning needs the CONTENTS permission, so test that endpoint.
+              echo "Checking Contents permission (the one git actually needs)..."
+              C_STATUS=$(curl -s -o /tmp/contents.json -w '%{http_code}' \
+                -H "Authorization: Bearer ${TOKEN_PART}" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/${REPO_PATH}/contents/" || echo "000")
+
+              # 200 = has contents. 404 on an EMPTY repo also means access is
+              # fine - there is simply nothing to list yet, which is the normal
+              # state before the first match run.
+              if [ "${C_STATUS}" = "200" ] || [ "${C_STATUS}" = "404" ]; then
+                echo "Contents endpoint returned ${C_STATUS} - token can read repository contents."
+
+                # Give match a URL that carries the credentials itself. With no
+                # Authorization header set, git uses these directly.
+                echo "::add-mask::${TOKEN_PART}"
+                AUTH_URL="https://${USER_PART}:${TOKEN_PART}@github.com/${REPO_PATH}.git"
+                echo "::add-mask::${AUTH_URL}"
+                echo "MATCH_GIT_URL=${AUTH_URL}" >> "$GITHUB_ENV"
+                echo "MATCH_GIT_URL set to an authenticated clone URL (no auth header)."
+
+                # Prove the exact mechanism match will use actually works,
+                # before spending a build on it.
+                echo "Verifying a real clone with these credentials..."
+                if GIT_TERMINAL_PROMPT=0 git ls-remote "${AUTH_URL}" >/dev/null 2>/tmp/git_err.txt; then
+                  echo "Clone credentials verified."
+                else
+                  echo "::error::git still cannot authenticate with credentials in the URL."
+                  sed 's/^/    /' /tmp/git_err.txt || true
+                  echo "The token is valid for the REST API but rejected for git."
+                  echo "Most likely the MATCH_GIT_AUTH secret was built from an OLDER token"
+                  echo "than the one now shown in your GitHub settings - regenerate the base64"
+                  echo "from the CURRENT token value."
+                  exit 1
+                fi
+              else
+                echo "::error::Contents endpoint returned ${C_STATUS}. The token cannot access file contents, so git clone WILL fail."
+                echo ""
+                echo "FIX: github.com/settings/personal-access-tokens -> open your token"
+                echo "  1. Repository access  -> ${REPO_PATH} must be selected"
+                echo "  2. Permissions -> Repository permissions -> Contents -> Read and write"
+                echo "  3. Save"
+                echo ""
+                echo "Fine-grained tokens set Contents to 'No access' by default."
+                echo "Metadata-only is enough to see the repo but NOT to clone it."
+                exit 1
+              fi
 
               # The git reachability check below is DIAGNOSTIC ONLY and must
               # never fail the build.
