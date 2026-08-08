@@ -56,9 +56,26 @@ function Write-Warn { param($t) Write-Host "  WARN $t" -ForegroundColor Yellow }
 function Write-Bad  { param($t) Write-Host "  STOP $t" -ForegroundColor Red }
 
 # Runs git, captures stderr as text, returns trimmed stdout, sets $script:GitExit.
+#
+# THE PARAMETER IS NAMED $GitArgs, NOT $Args, AND THAT IS LOAD-BEARING.
+#
+# Two separate problems with $Args:
+#   1. It is a PowerShell AUTOMATIC variable. Declaring a parameter with that
+#      name shadows it and is asking for trouble.
+#   2. PowerShell binds parameters by unique PREFIX. `Invoke-Git add -A` made
+#      PowerShell read `-A` as the start of `-Args`, so it demanded a value for
+#      it and the call failed with "Missing an argument for parameter 'Args'".
+#
+# That second one was not a loud failure. `git add -A` silently never ran, so
+# nothing was staged, the script reported "nothing has changed", and the push
+# happily re-pushed the PREVIOUS commit and said "Up to date". A whole session's
+# work stayed on disk while the output looked like success.
+#
+# No git flag used here starts with "G", so with this name nothing binds by
+# accident and everything reaches git as a plain argument.
 function Invoke-Git {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
-    $out = & git @Args 2>&1
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$GitArgs)
+    $out = & git @GitArgs 2>&1
     $script:GitExit = $LASTEXITCODE
     return ($out | Out-String).Trim()
 }
@@ -158,7 +175,23 @@ if ($leaked.Count -gt 0) {
 
 # Regex patterns are SINGLE quoted. In a double-quoted PowerShell string, $ and
 # ` are special, and brace quantifiers next to them are easy to get wrong.
-$rulePrivateKey = 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY'
+# DETECTS KEY MATERIAL, NOT THE WORDS "PRIVATE KEY".
+#
+# The previous rule matched the phrase anywhere, which blocked four files that
+# contain no key at all: the grep guard in release.yml, the setup instructions
+# telling you to copy the BEGIN and END lines, the membership test in
+# apple_certs.py, and a progress-log entry describing those very three. A
+# scanner that cries wolf gets bypassed with -Force, and then it protects
+# nothing.
+#
+# A real PEM key is an envelope AROUND a long base64 body. Requiring at least
+# two lines of 40+ base64 characters between the markers is what separates a key
+# from a sentence about keys. Leading whitespace is allowed so a key pasted into
+# an indented YAML block is still caught - that is a realistic way to leak one.
+#
+# Verified against 7 leak shapes (plain .p8, RSA, EC, OPENSSH, indented YAML,
+# CRLF, inside a Swift string literal) and 6 false-positive shapes.
+$rulePrivateKey = '-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\r\n]+(?:[ \t]*[A-Za-z0-9+/=]{40,}[ \t]*[\r\n]+){2,}[ \t]*-----END (?:[A-Z]+ )?PRIVATE KEY-----'
 $ruleGitHubToken = 'gh[pousr]_[A-Za-z0-9]{16,}'
 $rulePat = 'github_pat_[A-Za-z0-9_]{20,}'
 $ruleAws = 'AKIA[0-9A-Z]{16}'
@@ -176,11 +209,19 @@ $textFiles = Get-ChildItem -Path $Root -Recurse -File -Force -ErrorAction Silent
         $_.Extension -match '^\.(swift|md|yml|yaml|json|plist|py|rb|ps1|txt|xcprivacy|entitlements|storekit)$'
     }
 
+# READS EACH FILE WHOLE, NOT LINE BY LINE.
+#
+# Select-String matches per line. The private-key rule spans several lines by
+# design - that is the whole point of requiring a base64 body - so under
+# Select-String it would silently never fire and the scan would report "clean"
+# on a genuinely leaked key. Raw-mode reading is what makes the rule work.
 $contentHits = @()
-foreach ($rule in $contentRules) {
-    foreach ($file in $textFiles) {
-        $hit = Select-String -Path $file.FullName -Pattern $rule.Pattern -Quiet -ErrorAction SilentlyContinue
-        if ($hit) {
+foreach ($file in $textFiles) {
+    $text = Get-Content -Path $file.FullName -Raw -ErrorAction SilentlyContinue
+    if ([string]::IsNullOrEmpty($text)) { continue }
+
+    foreach ($rule in $contentRules) {
+        if ([regex]::IsMatch($text, $rule.Pattern)) {
             $contentHits += ($rule.Name + ' in ' + $file.FullName)
         }
     }
@@ -198,7 +239,16 @@ if ($contentHits.Count -gt 0) {
 # ---------------------------------------------------------------------------
 Write-Step '4. What will be committed'
 
-Invoke-Git add -A | Out-Null
+$addOutput = Invoke-Git add -A
+if ($GitExit -ne 0) {
+    # Checked explicitly, because this is exactly where the script previously
+    # lied. A failing `add` leaves nothing staged, which is indistinguishable
+    # from "no changes" unless the exit code is read - and the script then
+    # reported success while committing nothing.
+    Write-Bad 'git add failed, so nothing was staged.'
+    Write-Host "       $addOutput" -ForegroundColor Red
+    exit 1
+}
 
 $stagedRaw = Invoke-Git diff --cached --name-only
 $staged = @()
@@ -207,6 +257,20 @@ if ($stagedRaw) {
 }
 
 if ($staged.Count -eq 0) {
+    # Cross-check against the working tree before believing it. If git reports
+    # dirty files but nothing is staged, `add` did not do its job and saying
+    # "nothing has changed" would be wrong.
+    $dirty = Invoke-Git status --porcelain
+    if ($dirty) {
+        Write-Bad 'There are uncommitted changes but nothing was staged.'
+        Write-Host '       This means git add did not work. Nothing has been pushed.' -ForegroundColor Red
+        Write-Host "       Working tree:" -ForegroundColor Red
+        ($dirty -split "`r?`n" | Select-Object -First 10) | ForEach-Object {
+            Write-Host "         $_" -ForegroundColor Red
+        }
+        exit 1
+    }
+
     Write-Ok 'Nothing has changed since the last commit.'
     Write-Host "`n  Pushing anyway in case the last commit was never pushed." -ForegroundColor Cyan
     Invoke-Git push -u origin $Branch | Out-Host
@@ -234,11 +298,41 @@ Write-Ok 'Nothing dangerous is staged'
 # ---------------------------------------------------------------------------
 Write-Step '5. Commit and push'
 
+# NO PROMPT, AND NO STALE DEFAULT.
+#
+# This used to ask for a commit message and fall back to the Phase 1 text, which
+# meant every commit either needed typing or was mislabelled. Neither is worth a
+# human's attention: the message is derivable from what actually changed.
+#
+# Pass -Message to override when a commit deserves a real description.
 if ([string]::IsNullOrWhiteSpace($Message)) {
-    $Message = Read-Host '  Commit message (Enter for a default)'
-    if ([string]::IsNullOrWhiteSpace($Message)) {
-        $Message = 'Amblyo: docs, scaffold, data layer, design system, CI'
+    $changed = (Invoke-Git diff --cached --name-only) -split "`n" |
+               Where-Object { $_ -and $_.Trim() -ne '' }
+
+    $areas = @()
+    if ($changed -match '^App/Core/Psychophysics/')   { $areas += 'adaptive engine' }
+    if ($changed -match '^App/Core/Safety/')          { $areas += 'safety' }
+    if ($changed -match '^App/Core/Stimuli/')         { $areas += 'stimuli' }
+    if ($changed -match '^App/Core/Calibration/')     { $areas += 'calibration' }
+    if ($changed -match '^App/Features/Exercises/')   { $areas += 'exercises' }
+    if ($changed -match '^App/Features/Onboarding/')  { $areas += 'onboarding' }
+    if ($changed -match '^App/Features/Train/')       { $areas += 'train' }
+    if ($changed -match '^App/Purchases/')            { $areas += 'purchases' }
+    if ($changed -match '^Tests/')                    { $areas += 'tests' }
+    if ($changed -match '^\.github/')                 { $areas += 'ci' }
+    if ($changed -match '^scripts/')                  { $areas += 'scripts' }
+    if ($changed -match '^docs/')                     { $areas += 'docs' }
+    if ($changed -match '\.xcassets/')                { $areas += 'assets' }
+
+    $areas = $areas | Select-Object -Unique
+    $count = @($changed).Count
+
+    if ($areas.Count -gt 0) {
+        $Message = 'Update ' + ($areas -join ', ') + " ($count files)"
+    } else {
+        $Message = "Update $count files"
     }
+    Write-Host "  Message: $Message" -ForegroundColor DarkGray
 }
 
 Invoke-Git commit -m $Message | Out-Host

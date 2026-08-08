@@ -157,7 +157,7 @@ struct MainTabView: View {
         switch tab {
         case .today:    PlaceholderView(tab: .today)
         case .train:    TrainView()
-        case .progress: PlaceholderView(tab: .progress)
+        case .progress: ProgressDashboardView()
         case .learn:    PlaceholderView(tab: .learn)
         case .profile:  PlaceholderView(tab: .profile)
         }
