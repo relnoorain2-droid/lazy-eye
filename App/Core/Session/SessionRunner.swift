@@ -107,8 +107,14 @@ final class SessionRunner {
 
         // Resume the user's actual ability if we have it. First exposure starts
         // from the descriptor's default, eased for younger profiles.
+        //
+        // The calibration is passed in so the staircase cannot descend below
+        // what THIS screen at THIS distance can physically draw. Without it a
+        // staircase happily walks past the display's limit and starts measuring
+        // the pixels instead of the person. See StaircaseConfiguration.
         self.staircase = staircase
-            ?? descriptor.staircase.makeStaircase(ageGroup: profile.ageGroup)
+            ?? descriptor.staircase.makeStaircase(ageGroup: profile.ageGroup,
+                                                  calibration: profile.calibration)
 
         self.plannedSeconds = cap.allowedSessionSeconds(
             requested: min(profile.plannedSessionSeconds,

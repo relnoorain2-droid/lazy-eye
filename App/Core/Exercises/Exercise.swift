@@ -93,7 +93,11 @@ struct StaircaseConfiguration: Hashable, Sendable {
     let unit: String
 
     let startValue: Double
+
+    /// The hardest value the exercise would LIKE to reach. The value actually
+    /// used is `resolvedHardestValue(for:)`, which may be easier - see below.
     let hardestValue: Double
+
     let easiestValue: Double
     let polarity: Staircase.Polarity
 
@@ -104,6 +108,9 @@ struct StaircaseConfiguration: Hashable, Sendable {
     /// observer and the "is this above chance" check both need.
     let alternatives: Int
 
+    /// How this dimension is bounded by what the display can physically show.
+    let renderLimit: RenderLimit?
+
     init(
         dimensionName: String,
         unit: String = "",
@@ -113,7 +120,8 @@ struct StaircaseConfiguration: Hashable, Sendable {
         polarity: Staircase.Polarity,
         alternatives: Int,
         initialStepSize: Double = 0.5,
-        minimumStepSize: Double = 0.03
+        minimumStepSize: Double = 0.03,
+        renderLimit: RenderLimit? = nil
     ) {
         self.dimensionName = dimensionName
         self.unit = unit
@@ -124,20 +132,65 @@ struct StaircaseConfiguration: Hashable, Sendable {
         self.alternatives = alternatives
         self.initialStepSize = initialStepSize
         self.minimumStepSize = minimumStepSize
+        self.renderLimit = renderLimit
     }
 
     /// A fresh staircase, optionally started easier for younger users. Starting
     /// a six-year-old at the adult default is the fastest way to lose them in
     /// the first ninety seconds.
-    func makeStaircase(ageGroup: AgeGroup = .thirteenPlus) -> Staircase {
+    ///
+    /// Pass the profile's calibration wherever one exists: without it the
+    /// staircase can descend to a difficulty this screen cannot actually draw.
+    func makeStaircase(ageGroup: AgeGroup = .thirteenPlus,
+                       calibration: CalibrationProfile? = nil) -> Staircase {
         Staircase(
             start: startValue(for: ageGroup),
-            hardestValue: hardestValue,
+            hardestValue: resolvedHardestValue(for: calibration),
             easiestValue: easiestValue,
             polarity: polarity,
             initialStepSize: initialStepSize,
             minimumStepSize: minimumStepSize
         )
+    }
+
+    /// The hardest value this DISPLAY can honestly present, which is not always
+    /// the hardest value the exercise would like.
+    ///
+    /// WHY THIS EXISTS - and it is the most important twenty lines in the file.
+    /// Three of the four bounds originally written for Phase 6 were physically
+    /// impossible, checked against the real device table at real viewing
+    /// distances:
+    ///
+    ///   Contrast floor 0.005 - below 8-bit quantisation (2/255 = 0.0078). The
+    ///     patch is uniform grey. The observer guesses. The staircase records a
+    ///     threshold. The number is noise wearing a lab coat.
+    ///   Vernier 20 arcsec - 0.2 pt on an iPhone 14 Pro at 35 cm.
+    ///   Landolt -0.1 logMAR - a 0.49 pt gap.
+    ///
+    /// A staircase that descends past what the screen can draw does not stop
+    /// measuring; it starts measuring the display, silently, and reports the
+    /// answer with the same confidence as a real one. That is precisely the
+    /// failure mode that makes competitor apps' numbers meaningless, and it is
+    /// invisible unless you do this arithmetic.
+    ///
+    /// So the floor is derived at runtime from the user's own calibration rather
+    /// than hard-coded, and `isLimitedByDisplay(for:)` lets the UI say so.
+    func resolvedHardestValue(for calibration: CalibrationProfile?) -> Double {
+        guard let renderLimit else { return hardestValue }
+        guard let floor = renderLimit.hardestRenderableValue(for: calibration) else {
+            return hardestValue
+        }
+        // "Hardest" is whichever is EASIER of the two, in this polarity's terms.
+        return polarity == .lowerIsHarder
+            ? Swift.max(hardestValue, floor)
+            : Swift.min(hardestValue, floor)
+    }
+
+    /// True when the screen, not the exercise design, sets the ceiling on
+    /// difficulty. Worth surfacing: it means "you have maxed this out on this
+    /// device", not "you have maxed out your vision".
+    func isLimitedByDisplay(for calibration: CalibrationProfile?) -> Bool {
+        abs(resolvedHardestValue(for: calibration) - hardestValue) > 1e-9
     }
 
     func startValue(for ageGroup: AgeGroup) -> Double {
@@ -168,6 +221,68 @@ struct StaircaseConfiguration: Hashable, Sendable {
         let magnitude = abs(value)
         let decimals = magnitude >= 10 ? 0 : (magnitude >= 1 ? 1 : 3)
         return String(format: "%.\(decimals)f%@", value, unit)
+    }
+}
+
+// MARK: - Render limit
+
+/// How a staircase dimension is bounded by the physics of the display.
+///
+/// Each case knows how to turn "the smallest feature I can trust on screen"
+/// into a value in that dimension's own units.
+enum RenderLimit: Hashable, Sendable {
+
+    /// Dimension is an angle in ARCMINUTES, controlling a feature whose size in
+    /// points is proportional to it.
+    case arcminutes(minimumFeaturePoints: Double)
+
+    /// Dimension is an angle in ARCSECONDS.
+    case arcseconds(minimumFeaturePoints: Double)
+
+    /// Dimension is logMAR. The feature subtends 10^logMAR arcminutes - that is
+    /// the definition of the scale, so the conversion is a log, not a multiply.
+    case logMAR(minimumFeaturePoints: Double)
+
+    /// Michelson contrast, bounded by 8-bit output. `steps` is how many
+    /// quantisation levels of separation are needed before the modulation is
+    /// reliably visible rather than dithering noise.
+    case contrast(minimumQuantisationSteps: Double)
+
+    /// Spatial frequency in cycles per degree, bounded by Nyquist.
+    case cyclesPerDegree(pointsPerCycle: Double)
+
+    /// The hardest value this calibration can honestly render, or nil if the
+    /// limit does not apply (no calibration, or a dimension with no display
+    /// dependence at all).
+    func hardestRenderableValue(for calibration: CalibrationProfile?) -> Double? {
+        // Contrast is set by the framebuffer, not by geometry, so it is the one
+        // case that needs no calibration.
+        if case .contrast(let steps) = self {
+            return (steps / 255.0)
+        }
+
+        guard let calibration, calibration.isComplete else { return nil }
+        let pointsPerDegree = calibration.points(forDegrees: 1.0)
+        guard pointsPerDegree > 0 else { return nil }
+        let pointsPerArcminute = pointsPerDegree / 60.0
+
+        switch self {
+        case .arcminutes(let minimumPoints):
+            return minimumPoints / pointsPerArcminute
+
+        case .arcseconds(let minimumPoints):
+            return (minimumPoints / pointsPerArcminute) * 60.0
+
+        case .logMAR(let minimumPoints):
+            let arcminutes = minimumPoints / pointsPerArcminute
+            return log10(Swift.max(arcminutes, 1e-6))
+
+        case .cyclesPerDegree(let pointsPerCycle):
+            return pointsPerDegree / pointsPerCycle
+
+        case .contrast:
+            return nil   // handled above
+        }
     }
 }
 
