@@ -20,7 +20,9 @@ enum ExerciseRegistry {
     /// Everything currently implemented. Grows through Phases 6-8 toward the
     /// full 32 in docs/03-EXERCISE-CATALOG.md.
     static let all: [ExerciseDescriptor] = [
-        GaborOrientationExercise.descriptor
+        GaborOrientationExercise.descriptor,
+        LandoltRingsExercise.descriptor,
+        ContrastHuntExercise.descriptor
     ]
 
     static func descriptor(for id: String) -> ExerciseDescriptor? {
@@ -37,6 +39,10 @@ enum ExerciseRegistry {
         switch id {
         case GaborOrientationExercise.descriptor.id:
             return GaborOrientationExercise()
+        case LandoltRingsExercise.descriptor.id:
+            return LandoltRingsExercise()
+        case ContrastHuntExercise.descriptor.id:
+            return ContrastHuntExercise()
         default:
             return nil
         }

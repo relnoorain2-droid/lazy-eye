@@ -206,11 +206,22 @@ struct TrainView: View {
     @ViewBuilder
     private func sessionScreen(for descriptor: ExerciseDescriptor) -> some View {
         if let runner, let profile {
-            GaborOrientationView(
-                runner: runner,
-                calibration: profile.calibration ?? CalibrationProfile()
-            ) { _ in
-                endSession()
+            let calibration = profile.calibration ?? CalibrationProfile()
+
+            // Every exercise that is "look at a stimulus, tap which one" shares
+            // ChoiceExerciseView, so the fatigue button, break card and honest
+            // summary exist in exactly one place. M1 still has its own view for
+            // now; it will fold into the shell when its presenter is written.
+            switch descriptor.id {
+            case LandoltRingsExercise.descriptor.id:
+                ChoiceExerciseView(runner: runner, calibration: calibration,
+                                   presenter: LandoltPresenter()) { _ in endSession() }
+            case ContrastHuntExercise.descriptor.id:
+                ChoiceExerciseView(runner: runner, calibration: calibration,
+                                   presenter: ContrastHuntPresenter()) { _ in endSession() }
+            default:
+                GaborOrientationView(runner: runner,
+                                     calibration: calibration) { _ in endSession() }
             }
         } else {
             // Unreachable: `launching` is only set after `runner` is built.
