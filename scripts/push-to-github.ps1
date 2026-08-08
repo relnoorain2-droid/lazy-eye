@@ -352,11 +352,18 @@ if ($GitExit -eq 0) {
     Write-Host "`nPushed successfully." -ForegroundColor Green
     Write-Host '  https://github.com/relnoorain2-droid/lazy-eye'
     Write-Host ''
-    Write-Host 'Next:' -ForegroundColor White
-    Write-Host '  1. Confirm the repo is PRIVATE (Settings, then General)'
-    Write-Host '  2. Continue docs/PHASE-4-SETUP.md from step 2'
-    Write-Host '  3. CI runs automatically. The build job is EXPECTED to fail'
-    Write-Host '     the first time. Send the errors over.'
+    # This footer used to give Phase 4 setup instructions, which have been done
+    # for weeks. Stale advice in a script you run every day is worse than none:
+    # it either gets followed pointlessly or trains you to ignore the output.
+    Write-Host 'CI is running now:' -ForegroundColor White
+    Write-Host '  https://github.com/relnoorain2-droid/lazy-eye/actions'
+    Write-Host ''
+    Write-Host '  Lint takes about 10 seconds, build and test about 3 minutes.'
+    Write-Host '  If it fails, send the lines containing "error:" and nothing else.'
+    Write-Host ''
+    Write-Host '  Note: the repo is PUBLIC, which is what makes Actions free.' -ForegroundColor DarkGray
+    Write-Host '  Making it private again reinstates a 2,000 minute monthly cap,' -ForegroundColor DarkGray
+    Write-Host '  billed at 10x for macOS - roughly four release builds.' -ForegroundColor DarkGray
 } else {
     Write-Bad 'Push failed.'
     if ($pushOutput -match 'fetch first|rejected|non-fast-forward') {

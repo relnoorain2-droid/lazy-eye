@@ -25,25 +25,42 @@ struct StimulusFitTests {
 
     /// The supported hardware envelope. iPhone SE portrait at 320 pt is the
     /// binding constraint and is why it leads the list.
-    struct Device {
+    ///
+    /// STORES NUMBERS, NOT A `CalibrationProfile`.
+    /// `CalibrationProfile` is a SwiftData `@Model`, which means it is a
+    /// reference type and not `Sendable`. Holding one inside a `static let`
+    /// makes the whole array shared mutable state, and Swift 6 strict
+    /// concurrency rejects it:
+    ///
+    ///   static property 'devices' is not concurrency-safe because
+    ///   non-'Sendable' type '[Device]' may have shared mutable state
+    ///
+    /// Keeping the device table as plain values and building a fresh profile on
+    /// demand keeps it genuinely `Sendable`, and is more correct anyway: a test
+    /// that mutated a shared profile would silently affect every later test.
+    struct Device: Sendable {
         let name: String
         let widthPoints: Double
         let heightPoints: Double
-        let calibration: CalibrationProfile
-    }
+        let pointsPerInch: Double
+        let scale: Double
+        let distanceCM: Double
 
-    private static func device(_ name: String, ppi: Double, scale: Double,
-                               cm: Double, w: Double, h: Double) -> Device {
-        Device(name: name, widthPoints: w, heightPoints: h,
-               calibration: CalibrationProfile(screenPointsPerCM: (ppi / scale) / 2.54,
-                                               viewingDistanceCM: cm))
+        var calibration: CalibrationProfile {
+            CalibrationProfile(screenPointsPerCM: (pointsPerInch / scale) / 2.54,
+                               viewingDistanceCM: distanceCM)
+        }
     }
 
     static let devices: [Device] = [
-        device("iPhone SE", ppi: 326, scale: 2, cm: 35, w: 320, h: 568),
-        device("iPhone 14 Pro", ppi: 460, scale: 3, cm: 35, w: 393, h: 852),
-        device("iPad mini", ppi: 326, scale: 2, cm: 45, w: 744, h: 1133),
-        device("iPad Pro 13", ppi: 264, scale: 2, cm: 50, w: 1024, h: 1366)
+        Device(name: "iPhone SE", widthPoints: 320, heightPoints: 568,
+               pointsPerInch: 326, scale: 2, distanceCM: 35),
+        Device(name: "iPhone 14 Pro", widthPoints: 393, heightPoints: 852,
+               pointsPerInch: 460, scale: 3, distanceCM: 35),
+        Device(name: "iPad mini", widthPoints: 744, heightPoints: 1133,
+               pointsPerInch: 326, scale: 2, distanceCM: 45),
+        Device(name: "iPad Pro 13", widthPoints: 1024, heightPoints: 1366,
+               pointsPerInch: 264, scale: 2, distanceCM: 50)
     ]
 
     /// Margin left for bezel and layout padding.
