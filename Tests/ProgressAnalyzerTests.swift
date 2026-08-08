@@ -139,13 +139,36 @@ struct ProgressAnalyzerTests {
 
     @Test("Polarity is respected: higher is better for balance")
     func polarityRespected() {
-        let rising = noisySeries(slopePerDay: 0.004, noise: 0.03, count: 16, seed: 31)
+        // USES THE POWER-ANALYSED EFFECT SIZE, like the two tests above.
+        //
+        // This one was left on 0.004/day with 0.03 noise when those two were
+        // fixed, and it is below the detection threshold — both directions came
+        // back "no clear change", so the test failed while the code was right.
+        //
+        // The wider lesson, worth stating: my pre-push simulations reproduce the
+        // ALGORITHM but not Swift's exact RNG, because `Double.random(in:using:)`
+        // maps UInt64 to Double differently from the model. So a simulation can
+        // verify aggregate behaviour — bias, detection rate, false-positive rate
+        // — but it cannot promise that one particular seed falls a particular
+        // way. Anything asserting a single seed must therefore sit comfortably
+        // inside the detectable range, not on its edge.
+        let rising = noisySeries(slopePerDay: Self.detectableSlope,
+                                 noise: Self.detectableNoise,
+                                 count: Self.detectableCount, seed: 9)
 
-        let acuity = TrendFitter.fit(days: days(16), values: rising, lowerIsBetter: true)
-        let balance = TrendFitter.fit(days: days(16), values: rising, lowerIsBetter: false)
+        let acuity = TrendFitter.fit(days: days(Self.detectableCount),
+                                     values: rising, lowerIsBetter: true)
+        let balance = TrendFitter.fit(days: days(Self.detectableCount),
+                                      values: rising, lowerIsBetter: false)
 
+        // Identical data, opposite meaning. logMAR going up is worse; a
+        // binocular balance ratio going up is better.
         #expect(acuity?.direction == .worsening, "rising logMAR is worse")
         #expect(balance?.direction == .improving, "rising balance ratio is better")
+
+        // And the underlying fit must be the same either way — polarity changes
+        // only the interpretation, never the slope.
+        #expect(acuity?.slopePerDay == balance?.slopePerDay)
     }
 
     // MARK: Determinism
