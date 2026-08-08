@@ -228,6 +228,18 @@ struct TrainView: View {
             case CrowdedGaborExercise.descriptor.id:
                 ChoiceExerciseView(runner: runner, calibration: calibration,
                                    presenter: CrowdedGaborPresenter()) { _ in endSession() }
+            case CrowdedLettersExercise.descriptor.id:
+                ChoiceExerciseView(runner: runner, calibration: calibration,
+                                   presenter: CrowdedLettersPresenter()) { _ in endSession() }
+
+            // These two cannot use the shared shell: one animates, one takes its
+            // answer from a tap location rather than a button.
+            case MotionFieldExercise.descriptor.id:
+                MotionFieldView(runner: runner,
+                                calibration: calibration) { _ in endSession() }
+            case FindItExercise.descriptor.id:
+                FindItView(runner: runner,
+                           calibration: calibration) { _ in endSession() }
             default:
                 GaborOrientationView(runner: runner,
                                      calibration: calibration) { _ in endSession() }

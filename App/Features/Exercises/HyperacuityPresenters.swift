@@ -73,3 +73,34 @@ struct CrowdedGaborPresenter: ChoiceExercisePresenter {
             scale: scale)
     }
 }
+
+// MARK: - M6 · Crowded Letters
+
+/// The only presenter so far that varies its buttons per trial — four fresh
+/// Sloan letters each time, which is why `ChoiceExercisePresenter` gained
+/// `answers(for:)`.
+struct CrowdedLettersPresenter: ChoiceExercisePresenter {
+    private let exercise = CrowdedLettersExercise()
+
+    /// Never shown: this exercise always has a trial when buttons are visible.
+    /// Present only to satisfy the protocol's fixed-button requirement.
+    var answers: [(label: String, systemImage: String)] {
+        [("?", "questionmark"), ("?", "questionmark"),
+         ("?", "questionmark"), ("?", "questionmark")]
+    }
+
+    func answers(for trial: Trial) -> [(label: String, systemImage: String)] {
+        exercise.choices(for: trial).map { ($0, "") }
+    }
+
+    var instructions: String {
+        "Three letters will appear in a row. Tap the letter that was in the MIDDLE. They get closer together as you go."
+    }
+
+    func stimulus(for trial: Trial, calibration: CalibrationProfile,
+                  scale: Double) -> CGImage? {
+        LetterGenerator.makeImage(
+            exercise.parameters(for: trial, calibration: calibration),
+            scale: scale)
+    }
+}

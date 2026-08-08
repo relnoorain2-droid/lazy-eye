@@ -20,8 +20,13 @@ import SwiftUI
 /// What an exercise must provide to use the shared shell.
 @MainActor
 protocol ChoiceExercisePresenter {
-    /// Buttons, in answer-index order.
+    /// Buttons, in answer-index order, when they are the same every trial.
     var answers: [(label: String, systemImage: String)] { get }
+
+    /// Buttons for a SPECIFIC trial, when they change — M6 shows four different
+    /// letters each time. Defaults to `answers`, so exercises with fixed buttons
+    /// ignore this entirely.
+    func answers(for trial: Trial) -> [(label: String, systemImage: String)]
 
     /// The stimulus for this trial. Returning nil draws nothing, which is
     /// correct during feedback rather than an error.
@@ -38,6 +43,7 @@ protocol ChoiceExercisePresenter {
 
 extension ChoiceExercisePresenter {
     func offset(for trial: Trial) -> CGPoint { .zero }
+    func answers(for trial: Trial) -> [(label: String, systemImage: String)] { answers }
 }
 
 @MainActor
@@ -140,7 +146,10 @@ struct ChoiceExerciseView<Presenter: ChoiceExercisePresenter>: View {
     }
 
     private var answerButtons: some View {
-        let answers = presenter.answers
+        // Per-trial where the exercise needs it (M6's letters), otherwise the
+        // fixed set. Falls back to the fixed set between trials so the buttons
+        // do not vanish during the feedback moment.
+        let answers = runner.currentTrial.map { presenter.answers(for: $0) } ?? presenter.answers
         // Two across for a 2AFC, a 2x2 grid for a 4AFC. Beyond four the layout
         // would need rethinking, which is why nothing here has more.
         let columns = answers.count <= 2 ? answers.count : 2
