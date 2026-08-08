@@ -56,10 +56,18 @@ targets:
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
         ENABLE_PREVIEWS: YES
-    entitlements:
-      path: App/Amblyo.entitlements
-      properties:
-        com.apple.developer.healthkit: false      # flip to true in v1.1
+    # NO entitlements block.
+    #
+    # This previously declared `com.apple.developer.healthkit: false` as a
+    # v1.1 placeholder. XcodeGen wrote that key into the entitlements file, and
+    # archiving then failed with:
+    #   "Entitlement com.apple.developer.healthkit not found and could not be
+    #    included in profile."
+    # An entitlement must be enabled on the App ID before it can appear here -
+    # even set to false. The App ID has only In-App Purchase enabled.
+    #
+    # For v1.1: enable HealthKit on the App ID in the developer portal FIRST,
+    # then add the entitlements block back.
 
   AmblyoTests:
     type: bundle.unit-test
