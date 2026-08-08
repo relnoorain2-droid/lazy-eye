@@ -142,11 +142,14 @@ final class SessionRunner {
 
     private func startClock() {
         clock?.cancel()
+        // `Task {}` inside a @MainActor method inherits main-actor isolation, so
+        // `tick()` is called directly - no `await`, no hop, no reentrancy window
+        // between the sleep and the state change.
         clock = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 guard let self else { return }
-                await self.tick()
+                self.tick()
             }
         }
     }

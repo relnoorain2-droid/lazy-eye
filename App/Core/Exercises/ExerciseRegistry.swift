@@ -29,10 +29,16 @@ enum ExerciseRegistry {
 
     /// Live instance for an id. The `switch` is the one place that has to know
     /// concrete types; everywhere else works from descriptors.
+    /// Explicit `return`s rather than a switch expression: the branches here are
+    /// a concrete type and `nil`, and asking the compiler to unify those into
+    /// `(any Exercise)?` by inference is exactly the kind of thing that resolves
+    /// on one toolchain and not the next.
     static func make(_ id: String) -> (any Exercise)? {
         switch id {
-        case GaborOrientationExercise.descriptor.id: GaborOrientationExercise()
-        default: nil
+        case GaborOrientationExercise.descriptor.id:
+            return GaborOrientationExercise()
+        default:
+            return nil
         }
     }
 

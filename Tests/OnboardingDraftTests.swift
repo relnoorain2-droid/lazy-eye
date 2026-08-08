@@ -45,18 +45,25 @@ struct OnboardingDraftTests {
         #expect(draft.canAdvance(from: .calibration))
     }
 
-    @Test("Implausible values are rejected at both ends",
-          arguments: [
-            (5.0, 45.0),      // density far too low
-            (500.0, 45.0),    // density far too high
-            (55.0, 2.0),      // sitting inside the screen
-            (55.0, 400.0),    // across the room
-          ])
-    func implausibleValuesRejected(density: Double, distance: Double) {
-        var draft = OnboardingDraft()
-        draft.screenPointsPerCM = density
-        draft.viewingDistanceCM = distance
-        #expect(draft.isCalibrationUsable == false)
+    // Looped rather than a parameterised `arguments:` tuple array. Swift Testing
+    // can destructure a collection of tuples into a two-parameter test, but the
+    // overload resolution between "one collection of tuples" and "a tuple of
+    // collections" is the sort of ambiguity that costs a full CI round trip to
+    // discover. A named case list reads just as well in a failure message.
+    @Test("Implausible values are rejected at both ends")
+    func implausibleValuesRejected() {
+        let cases: [(name: String, density: Double, distance: Double)] = [
+            ("density far too low", 5, 45),
+            ("density far too high", 500, 45),
+            ("sitting inside the screen", 55, 2),
+            ("across the room", 55, 400),
+        ]
+        for testCase in cases {
+            var draft = OnboardingDraft()
+            draft.screenPointsPerCM = testCase.density
+            draft.viewingDistanceCM = testCase.distance
+            #expect(draft.isCalibrationUsable == false, "\(testCase.name) was accepted")
+        }
     }
 
     // MARK: Non-blocking steps

@@ -200,7 +200,10 @@ struct GaborOrientationView: View {
             return
         }
         let parameters = exercise.gaborParameters(for: trial, calibration: calibration)
-        stimulus = GaborGenerator.makeImage(parameters, scale: displayScale)
+        // Explicit Double(): displayScale is a CGFloat, and relying on the
+        // implicit CGFloat/Double bridge inside a generic call is a needless
+        // inference risk.
+        stimulus = GaborGenerator.makeImage(parameters, scale: Double(displayScale))
     }
 
     private func timeString(_ seconds: Int) -> String {

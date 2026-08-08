@@ -25,6 +25,16 @@ struct TrainView: View {
     @Environment(\.theme) private var theme
 
     @State private var launching: ExerciseDescriptor?
+    /// Built ONCE, when Start is tapped.
+    ///
+    /// It used to be constructed inside the `fullScreenCover` content builder,
+    /// which looks tidier and is broken: `SessionRunner` is `@Observable`, the
+    /// session view observes its `phase`, so every single trial re-evaluated the
+    /// builder and produced a BRAND NEW runner — a session that silently reset
+    /// itself after the first answer and could never finish. Ownership has to
+    /// outlive the body evaluation, so it lives in `@State`.
+    @State private var runner: SessionRunner?
+    @State private var startError: String?
     @State private var secondsUsedToday = 0
     @State private var loadError: String?
 
@@ -58,6 +68,10 @@ struct TrainView: View {
                 if let loadError {
                     SafetyBanner(level: .caution, title: "Couldn't read today's history",
                                  message: loadError)
+                }
+
+                if let startError {
+                    SafetyBanner(level: .caution, title: "Couldn't start", message: startError)
                 }
 
                 let cap = sessionCap(for: profile)
@@ -125,7 +139,7 @@ struct TrainView: View {
                     .foregroundStyle(Color.textSecondary)
 
                 AmblyoButton(title: "Start", systemImage: "play.fill") {
-                    launching = descriptor
+                    start(descriptor, profile: profile, cap: cap)
                 }
                 .disabled(cap.isDailyCapReached)
             }
@@ -160,28 +174,49 @@ struct TrainView: View {
 
     // MARK: Session
 
+    /// Creates the runner exactly once, then presents. If construction fails the
+    /// cover is never shown at all, so the user gets an inline message instead
+    /// of a blank full-screen sheet.
+    private func start(_ descriptor: ExerciseDescriptor,
+                       profile: Profile,
+                       cap: SessionCap) {
+        guard let session = SessionRunner(
+            descriptor: descriptor,
+            profile: profile,
+            targetEye: trainingEye(for: profile),
+            context: context,
+            cap: cap,
+            resuming: nil
+        ) else {
+            startError = "\(descriptor.title) isn't available in this build."
+            return
+        }
+        startError = nil
+        runner = session
+        launching = descriptor
+    }
+
+    private func endSession() {
+        runner?.stop()
+        runner = nil
+        launching = nil
+        refreshUsage()
+    }
+
     @ViewBuilder
     private func sessionScreen(for descriptor: ExerciseDescriptor) -> some View {
-        if let profile,
-           let runner = SessionRunner(
-               descriptor: descriptor,
-               profile: profile,
-               targetEye: trainingEye(for: profile),
-               context: context,
-               cap: sessionCap(for: profile),
-               resuming: nil) {
+        if let runner, let profile {
             GaborOrientationView(
                 runner: runner,
                 calibration: profile.calibration ?? CalibrationProfile()
             ) { _ in
-                launching = nil
-                refreshUsage()
+                endSession()
             }
         } else {
-            // Registry and UI disagreeing is a programming error, not a user
-            // error - but it must not be a blank screen in a shipped build.
-            ContentUnavailableView("Couldn't start", systemImage: "exclamationmark.triangle",
-                                   description: Text("This exercise isn't available right now."))
+            // Unreachable: `launching` is only set after `runner` is built.
+            // Present rather than crash, and close the cover so the user is not
+            // stranded on a blank screen.
+            Color.clear.onAppear { endSession() }
         }
     }
 
