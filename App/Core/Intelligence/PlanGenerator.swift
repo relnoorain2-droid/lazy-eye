@@ -113,13 +113,28 @@ struct PlanGenerator: Sendable {
                                  : "Nothing to practise yet.")
         }
 
-        let ranked = states
-            .map { (state: $0, score: score($0)) }
-            // Tie-break on id so the plan is stable between launches rather than
-            // reshuffling whenever two scores are equal.
-            .sorted { $0.score == $1.score
-                        ? $0.state.descriptor.id < $1.state.descriptor.id
-                        : $0.score > $1.score }
+        // A NAMED STRUCT, NOT A TUPLE — and it fixes two compiler errors at once.
+        //
+        // This was `(state:, score:)`. Swift cannot form a key path into a
+        // tuple, so `chosen.map(\.state)` failed with "cannot infer key path
+        // type from context"; and the tie-breaking sort closure over tuples was
+        // enough to make the type checker give up entirely with "unable to
+        // type-check this expression in reasonable time". Both go away with a
+        // real type, and the code reads better besides.
+        struct Ranked {
+            let state: ExerciseState
+            let score: Double
+        }
+
+        let scored = states.map { Ranked(state: $0, score: score($0)) }
+
+        // Tie-break on id so the plan is stable between launches rather than
+        // reshuffling whenever two scores are equal. Split out of the sort
+        // closure so each comparison is a simple expression.
+        let ranked = scored.sorted { first, second in
+            if first.score != second.score { return first.score > second.score }
+            return first.state.descriptor.id < second.state.descriptor.id
+        }
 
         let targetCount = min(ranked.count, available >= 15 * 60 ? 3 : 2)
         let chosen = Array(ranked.prefix(targetCount))
@@ -130,15 +145,20 @@ struct PlanGenerator: Sendable {
         // Split the budget evenly, then give any remainder to the first item so
         // the total lands exactly on the cap rather than a second under it.
         let each = available / chosen.count
+        let remainder = available - each * chosen.count
         var items: [SessionPlan.Item] = []
         for (index, entry) in chosen.enumerated() {
-            let seconds = index == 0 ? each + (available - each * chosen.count) : each
-            items.append(.init(exerciseID: entry.state.descriptor.id, seconds: seconds))
+            let seconds = index == 0 ? each + remainder : each
+            items.append(SessionPlan.Item(exerciseID: entry.state.descriptor.id,
+                                          seconds: seconds))
         }
 
+        let total = items.reduce(0) { $0 + $1.seconds }
+        let chosenStates = chosen.map { $0.state }
+
         return SessionPlan(items: items,
-                           totalSeconds: items.reduce(0) { $0 + $1.seconds },
-                           rationale: rationale(for: chosen.map(\.state)))
+                           totalSeconds: total,
+                           rationale: rationale(for: chosenStates))
     }
 
     private func rationale(for states: [ExerciseState]) -> String {
