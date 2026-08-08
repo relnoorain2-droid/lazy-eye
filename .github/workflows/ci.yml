@@ -42,6 +42,12 @@ jobs:
             exit 1
           fi
 
+      # Ten milliseconds here instead of a five-minute macOS build plus the wait
+      # for Apple to answer. This is the check that would have caught the
+      # build-8 rejection. See scripts/check_app_icon.py.
+      - name: App icon meets Apple's upload rules
+        run: python3 scripts/check_app_icon.py
+
       - name: Legal documents are present
         run: |
           for doc in medical-disclaimer privacy-policy subscription-terms evidence-and-methods; do
