@@ -192,7 +192,10 @@ struct OnboardingFlow: View {
             ageGroup: draft.ageGroup,
             amblyopicEye: draft.amblyopicEye,
             wearsCorrection: draft.wearsCorrection,
-            isPro: subscriptions.isPro
+            // `isPro` lives on EntitlementStatus, not on the manager - the
+            // manager exposes `status`, and grace period and billing retry both
+            // still count as entitled.
+            isPro: subscriptions.status.isPro
         )
         profile.preferences = draft.preferences
 

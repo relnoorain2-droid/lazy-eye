@@ -240,7 +240,7 @@ struct TrainView: View {
     private func availableExercises(for profile: Profile) -> [ExerciseDescriptor] {
         ExerciseRegistry.available(
             for: profile,
-            isPro: subscriptions.isPro,
+            isPro: subscriptions.status.isPro,
             canUseAnaglyph: profile.canUseDichopticTrack
         )
     }
