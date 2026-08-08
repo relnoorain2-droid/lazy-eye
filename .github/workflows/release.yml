@@ -37,10 +37,13 @@ jobs:
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
       MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
-      # MATCH_GIT_BASIC_AUTHORIZATION is set by the preflight step below,
-      # after it has been normalised and verified. Do NOT set it here too -
-      # a job-level env var would win over what the step writes to GITHUB_ENV.
+      # MATCH_GIT_URL and MATCH_GIT_BASIC_AUTHORIZATION are BOTH set by the
+      # preflight step below. Do not declare either here.
+      #
+      # Job-level env wins over anything a step writes to GITHUB_ENV, so
+      # declaring them here silently discarded the working values the preflight
+      # produced. That is why match kept failing to clone even though the
+      # preflight had just proved the token works.
       FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: '120'
 
     steps:
@@ -130,7 +133,20 @@ jobs:
             200)
               PERMS=$(python3 -c "import json;d=json.load(open('/tmp/api.json'));print(d.get('permissions',{}))" 2>/dev/null || echo "?")
               echo "Repo found. Permissions: ${PERMS}"
-              echo "Token is valid and authorised. Proceeding."
+              echo "Token is valid and authorised."
+
+              # Hand match a URL with the token already embedded, rather than
+              # relying on an Authorization header that match must apply itself.
+              #
+              # This is the most robust form: git handles credentials-in-URL
+              # natively - no header plumbing, no dependency on match's internal
+              # clone implementation. The header variable is still exported
+              # above as a fallback.
+              echo "::add-mask::${TOKEN_PART}"
+              AUTH_URL="https://x-access-token:${TOKEN_PART}@github.com/${REPO_PATH}.git"
+              echo "::add-mask::${AUTH_URL}"
+              echo "MATCH_GIT_URL=${AUTH_URL}" >> "$GITHUB_ENV"
+              echo "MATCH_GIT_URL set to an authenticated clone URL for ${REPO_PATH}"
 
               # The git reachability check below is DIAGNOSTIC ONLY and must
               # never fail the build.
