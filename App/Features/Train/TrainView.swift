@@ -219,6 +219,15 @@ struct TrainView: View {
             case ContrastHuntExercise.descriptor.id:
                 ChoiceExerciseView(runner: runner, calibration: calibration,
                                    presenter: ContrastHuntPresenter()) { _ in endSession() }
+            case VernierExercise.descriptor.id:
+                ChoiceExerciseView(runner: runner, calibration: calibration,
+                                   presenter: VernierPresenter()) { _ in endSession() }
+            case GlassPatternExercise.descriptor.id:
+                ChoiceExerciseView(runner: runner, calibration: calibration,
+                                   presenter: GlassPatternPresenter()) { _ in endSession() }
+            case CrowdedGaborExercise.descriptor.id:
+                ChoiceExerciseView(runner: runner, calibration: calibration,
+                                   presenter: CrowdedGaborPresenter()) { _ in endSession() }
             default:
                 GaborOrientationView(runner: runner,
                                      calibration: calibration) { _ in endSession() }

@@ -22,7 +22,10 @@ enum ExerciseRegistry {
     static let all: [ExerciseDescriptor] = [
         GaborOrientationExercise.descriptor,
         LandoltRingsExercise.descriptor,
-        ContrastHuntExercise.descriptor
+        ContrastHuntExercise.descriptor,
+        VernierExercise.descriptor,
+        GlassPatternExercise.descriptor,
+        CrowdedGaborExercise.descriptor
     ]
 
     static func descriptor(for id: String) -> ExerciseDescriptor? {
@@ -43,6 +46,12 @@ enum ExerciseRegistry {
             return LandoltRingsExercise()
         case ContrastHuntExercise.descriptor.id:
             return ContrastHuntExercise()
+        case VernierExercise.descriptor.id:
+            return VernierExercise()
+        case GlassPatternExercise.descriptor.id:
+            return GlassPatternExercise()
+        case CrowdedGaborExercise.descriptor.id:
+            return CrowdedGaborExercise()
         default:
             return nil
         }
