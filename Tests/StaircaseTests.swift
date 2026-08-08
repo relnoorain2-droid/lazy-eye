@@ -254,13 +254,18 @@ struct StaircaseTests {
     // Deterministic tests over hand-built reversal lists close that gap. This is
     // the difference between a test suite that measures and one that verifies.
 
-    /// Builds a staircase whose reversal list is exactly `values`, by driving it
-    /// through the real `record(correct:)` path — no test-only setters, so what
-    /// is tested is what ships.
+    /// Drives a staircase to AT LEAST `count` reversals through the real
+    /// `record(correct:)` path — no test-only setters, so what is tested is what
+    /// ships.
+    ///
+    /// IT CAN OVERSHOOT, AND CALLERS MUST NOT ASSUME OTHERWISE.
+    /// A TTTF group yields one reversal on the first pass and two on every pass
+    /// after, so even targets land on the next odd number: asking for 6 gives 7.
+    /// An earlier version of `belowEvidenceFloorReturnsNil` computed its
+    /// expectation from the REQUESTED count and failed in CI for exactly this
+    /// reason. Read `reversals.count` back off the returned staircase.
     private func staircaseWithReversals(count: Int) -> Staircase {
         var staircase = makeStaircase(start: 20)
-        // 3 correct steps harder, 1 wrong steps easier: alternating those
-        // produces one reversal per group.
         while staircase.reversals.count < count {
             staircase.record(correct: true)
             staircase.record(correct: true)
@@ -304,16 +309,35 @@ struct StaircaseTests {
 
     @Test("Fewer than four usable reversals yields no threshold at all")
     func belowEvidenceFloorReturnsNil() {
-        for count in 1...6 {
-            let staircase = staircaseWithReversals(count: count)
-            let usable = count - Staircase.reversalsDiscardedAsWarmup
+        for requested in 1...10 {
+            let staircase = staircaseWithReversals(count: requested)
+            // Derived from what the staircase ACTUALLY has, not from what was
+            // asked for — the builder overshoots on even targets.
+            let actual = staircase.reversals.count
+            let usable = actual - Staircase.reversalsDiscardedAsWarmup
+
             if usable < 4 {
                 #expect(staircase.threshold == nil,
-                        "\(count) reversals leaves \(usable) usable — must not report")
+                        "\(actual) reversals leaves \(usable) usable — must not report a threshold")
             } else {
-                #expect(staircase.threshold != nil)
+                #expect(staircase.threshold != nil,
+                        "\(actual) reversals leaves \(usable) usable — should report")
             }
         }
+    }
+
+    @Test("Seven reversals is the fewest that reports anything")
+    func evidenceFloorBoundary() {
+        // Pins the boundary explicitly: 3 warmup + 4 minimum usable = 7.
+        // If someone retunes `reversalsDiscardedAsWarmup`, this is the test that
+        // says out loud what the knock-on effect is.
+        let below = staircaseWithReversals(count: 5)
+        #expect(below.reversals.count < 7)
+        #expect(below.threshold == nil)
+
+        let atFloor = staircaseWithReversals(count: 7)
+        #expect(atFloor.reversals.count == 7)
+        #expect(atFloor.threshold != nil)
     }
 
     @Test("The averaging window is always an even number of reversals")

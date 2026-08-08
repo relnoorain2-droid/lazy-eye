@@ -129,9 +129,18 @@ struct FatigueMonitor: Equatable, Sendable {
         var message: String {
             switch self {
             case .rest:
+                // Contains none of the phrases on the banned list in
+                // `neverEncouragesContinuing`, not even negated ones. An earlier
+                // draft said "...to stop, not to X" using one of them, and the
+                // test caught it. Weakening the test so the sentence could keep a
+                // rhetorical flourish would trade a real safeguard for a turn of
+                // phrase. It says the same thing without it.
+                //
+                // The banned phrases are deliberately not quoted in this comment,
+                // so a plain grep over the file stays clean too.
                 """
-                Tired eyes are a signal to stop, not to push through. Look at \
-                something far away for a minute, and come back tomorrow.
+                Tired eyes are a signal to stop. Look at something far away for \
+                a minute, and come back tomorrow.
                 """
             case .restAndConsiderProfessional:
                 """

@@ -185,6 +185,32 @@ enum ScreenGeometry {
         ppcm * referenceCardWidthCM
     }
 
+    static func cardShortEdgePoints(atPointsPerCM ppcm: Double) -> Double {
+        cardLongEdgePoints(atPointsPerCM: ppcm)
+            * (referenceCardHeightCM / referenceCardWidthCM)
+    }
+
+    /// Breathing room so the outline is never flush to the bezel, where the user
+    /// cannot see its edge against a real card.
+    static let cardCheckMarginPoints: Double = 24
+
+    /// THE SINGLE DEFINITION OF WHETHER THE CARD CHECK IS POSSIBLE.
+    ///
+    /// This used to be written out inline in the calibration view AND
+    /// re-derived by hand in the test, and the two disagreed - the test asserted
+    /// the card's long edge exceeded the screen's long axis, which is false on an
+    /// iPhone SE (549 pt of card against 568 pt of screen). The card genuinely
+    /// does not fit there, but because of the SHORT edge and the margin, not the
+    /// long one. One function, used by both, so they cannot drift again.
+    static func cardCheckFits(longAxisPoints: Double,
+                              shortAxisPoints: Double,
+                              atPointsPerCM ppcm: Double) -> Bool {
+        guard ppcm > 0 else { return false }
+        let long = cardLongEdgePoints(atPointsPerCM: ppcm) + cardCheckMarginPoints
+        let short = cardShortEdgePoints(atPointsPerCM: ppcm) + cardCheckMarginPoints
+        return long <= longAxisPoints && short <= shortAxisPoints
+    }
+
     // MARK: - Device identifier
 
     /// e.g. "iPad13,4". On the simulator, the identifier of the simulated device.

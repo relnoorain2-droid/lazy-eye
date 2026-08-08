@@ -9,13 +9,26 @@ APP_ID  = "com.amblyo.app"
 SCHEME  = "Amblyo"
 TEAM_ID = "QAT93YWVSF"
 
-# Simulators used for tests. One small phone and one large iPad, because the
-# layout has to survive 320pt width and 13-inch split view, and neither of those
-# is checkable by eye from Windows.
-TEST_DEVICES = [
-  "iPhone 16",
-  "iPad Pro 13-inch (M4)"
-].freeze
+# Simulators used for tests.
+#
+# COST, STATED PLAINLY: GitHub bills macOS minutes at 10x the Linux rate, and a
+# two-simulator run is roughly 5 minutes of wall clock = ~50 billed minutes. On
+# the free tier that is about 40 runs a month, and a phase of work can easily
+# take 5 rounds. So the DEFAULT is one phone, and the iPad is opt-in.
+#
+# WHY THE iPad IS STILL WORTH RUNNING SOMETIMES: it caught a real bug in Phase 4
+# that the phone could not (NavigationSplitView hides the sidebar in portrait, so
+# a UI assertion written for the phone layout silently looked for the wrong
+# element). Dropping it permanently would be a false economy.
+#
+# Set TEST_DEVICES to override, comma-separated:
+#   TEST_DEVICES="iPhone 16,iPad Pro 13-inch (M4)" bundle exec fastlane ci
+DEFAULT_TEST_DEVICES = ["iPhone 16"].freeze
+FULL_TEST_DEVICES = ["iPhone 16", "iPad Pro 13-inch (M4)"].freeze
+
+TEST_DEVICES = (
+  ENV["TEST_DEVICES"]&.split(",")&.map(&:strip)&.reject(&:empty?) || DEFAULT_TEST_DEVICES
+).freeze
 
 def asc_key
   app_store_connect_api_key(

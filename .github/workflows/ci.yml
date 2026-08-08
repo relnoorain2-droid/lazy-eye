@@ -60,6 +60,18 @@ jobs:
     needs: lint
     runs-on: macos-15
     timeout-minutes: 45
+
+    env:
+      # One simulator on an ordinary push; both when the workflow is started by
+      # hand. macOS minutes bill at 10x, so a second simulator doubles the cost
+      # of every iteration during a phase of active development. Run the full
+      # matrix deliberately - before a release, or when touching layout - rather
+      # than on every commit. See the Fastfile for the reasoning.
+      TEST_DEVICES: >-
+        ${{ github.event_name == 'workflow_dispatch'
+            && 'iPhone 16,iPad Pro 13-inch (M4)'
+            || 'iPhone 16' }}
+
     steps:
       - uses: actions/checkout@v4
 

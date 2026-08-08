@@ -116,12 +116,9 @@ struct CalibrationStepView: View {
         guard ppcm > 0 else { return false }
 
         let (long, short) = ScreenGeometry.pointResolution()
-        let cardLong = ScreenGeometry.cardLongEdgePoints(atPointsPerCM: ppcm)
-        let cardShort = cardLong * (ScreenGeometry.referenceCardHeightCM
-                                    / ScreenGeometry.referenceCardWidthCM)
-        // 24pt of breathing room so the outline is never flush to the bezel,
-        // where the user cannot see its edge against a real card.
-        return cardLong + 24 <= long && cardShort + 24 <= short
+        return ScreenGeometry.cardCheckFits(longAxisPoints: long,
+                                            shortAxisPoints: short,
+                                            atPointsPerCM: ppcm)
     }
 
     private var sourceLabel: String {

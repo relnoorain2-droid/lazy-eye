@@ -128,28 +128,54 @@ struct OnboardingDraftTests {
     // If someone later "simplifies" the calibration step back to card-only, this
     // is the test that explains why that breaks small phones.
 
-    @Test("A bank card is physically wider than the smallest supported screens")
+    @Test("The card check is refused on the smallest supported screens")
     func cardDoesNotFitEverywhere() {
-        // iPhone SE 3rd gen: 320 x 568 pt at 326 ppi / 2x -> 64.2 pt/cm.
+        // iPhone SE 3rd gen: 320 x 568 pt at 326 ppi / 2x -> 64.17 pt/cm.
+        // Card at true size: 549.3 x 346.4 pt.
         let sePointsPerCM = (326.0 / 2.0) / 2.54
-        let cardLong = ScreenGeometry.cardLongEdgePoints(atPointsPerCM: sePointsPerCM)
-        let cardShort = cardLong * (ScreenGeometry.referenceCardHeightCM
-                                    / ScreenGeometry.referenceCardWidthCM)
 
-        #expect(cardLong > 568, "card long edge should exceed the SE's long axis")
-        #expect(cardShort > 320, "even the card's SHORT edge exceeds the SE's width")
+        #expect(ScreenGeometry.cardCheckFits(longAxisPoints: 568,
+                                             shortAxisPoints: 320,
+                                             atPointsPerCM: sePointsPerCM) == false)
+
+        // WHY it does not fit, stated exactly, because an earlier version of
+        // this test asserted the wrong reason and passed for the wrong screens.
+        // The long edge (549) actually IS smaller than the 568 pt long axis; it
+        // is the SHORT edge, at 346 pt against a 320 pt width, that makes the
+        // card impossible in either orientation.
+        let short = ScreenGeometry.cardShortEdgePoints(atPointsPerCM: sePointsPerCM)
+        let long = ScreenGeometry.cardLongEdgePoints(atPointsPerCM: sePointsPerCM)
+        #expect(short > 320, "card short edge \(short) must exceed the SE's 320 pt width")
+        #expect(long < 568, "card long edge \(long) is NOT wider than the 568 pt long axis")
     }
 
-    @Test("A bank card fits comfortably on a large iPad")
+    @Test("The card check is offered on a large iPad")
     func cardFitsOnIPad() {
-        // iPad Pro 12.9in: 1024 x 1366 pt at 264 ppi / 2x -> 52.0 pt/cm.
+        // iPad Pro 12.9in: 1024 x 1366 pt at 264 ppi / 2x -> 51.97 pt/cm.
         let padPointsPerCM = (264.0 / 2.0) / 2.54
-        let cardLong = ScreenGeometry.cardLongEdgePoints(atPointsPerCM: padPointsPerCM)
-        let cardShort = cardLong * (ScreenGeometry.referenceCardHeightCM
-                                    / ScreenGeometry.referenceCardWidthCM)
+        #expect(ScreenGeometry.cardCheckFits(longAxisPoints: 1366,
+                                             shortAxisPoints: 1024,
+                                             atPointsPerCM: padPointsPerCM))
+    }
 
-        #expect(cardLong + 24 < 1366)
-        #expect(cardShort + 24 < 1024)
+    @Test("The decision is made from the window size, not the device")
+    func cardCheckUsesWindowNotDevice() {
+        let padPointsPerCM = (264.0 / 2.0) / 2.54
+
+        // An iPad's card is only 445 x 281 pt because its density is LOW, so it
+        // still fits a 320 pt Slide Over window. I first wrote this test asserting
+        // the opposite — that a narrow window always falls back — and the
+        // simulation showed it was false. The real property worth pinning is that
+        // the answer tracks the window, so a genuinely tiny window does refuse.
+        #expect(ScreenGeometry.cardCheckFits(longAxisPoints: 1366,
+                                             shortAxisPoints: 320,
+                                             atPointsPerCM: padPointsPerCM),
+                "a 320 pt window still fits an iPad-density card")
+
+        #expect(ScreenGeometry.cardCheckFits(longAxisPoints: 1366,
+                                             shortAxisPoints: 280,
+                                             atPointsPerCM: padPointsPerCM) == false,
+                "a 280 pt window cannot")
     }
 
     @Test("Card width converts back to the density it came from")
