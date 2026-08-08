@@ -73,7 +73,7 @@ struct RootView: View {
             if launchState.hasCompletedOnboarding {
                 MainTabView()
             } else {
-                OnboardingPlaceholderView()
+                OnboardingFlow()
             }
         }
         .animation(.easeInOut(duration: 0.25), value: launchState.hasCompletedOnboarding)
@@ -156,7 +156,7 @@ struct MainTabView: View {
     private func destination(for tab: Tab) -> some View {
         switch tab {
         case .today:    PlaceholderView(tab: .today)
-        case .train:    PlaceholderView(tab: .train)
+        case .train:    TrainView()
         case .progress: PlaceholderView(tab: .progress)
         case .learn:    PlaceholderView(tab: .learn)
         case .profile:  PlaceholderView(tab: .profile)
@@ -176,28 +176,6 @@ struct PlaceholderView: View {
             Text("Phase 1 scaffold. See docs/13-BUILD-ROADMAP.md.")
         }
         .navigationTitle(tab.title)
-    }
-}
-
-struct OnboardingPlaceholderView: View {
-    @Environment(LaunchState.self) private var launchState
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "eyeglasses")
-                .font(.system(size: 64))
-                .foregroundStyle(.tint)
-            Text("Amblyo")
-                .font(.largeTitle.bold())
-            Text("Onboarding is built in Phase 3.")
-                .foregroundStyle(.secondary)
-            Button("Continue") {
-                launchState.hasCompletedOnboarding = true
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-        }
-        .padding()
     }
 }
 

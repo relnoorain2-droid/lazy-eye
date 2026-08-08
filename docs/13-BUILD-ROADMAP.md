@@ -101,7 +101,7 @@ parity. Screenshots are generated from this data, so the tests are a compliance 
 
 ---
 
-## ☐ PHASE 3 — Design system + onboarding
+## ☑ PHASE 3 — Design system + onboarding — **DONE 2026-08-08**
 
 **Entry state:** Phase 2.
 **Required reading:** `05-DESIGN-SYSTEM.md` (all), `14-REVIEW-COMPLAINTS-MATRIX.md`, `08` §4.
@@ -157,7 +157,7 @@ touched a Mac.
 
 ---
 
-## ☐ PHASE 5 — Exercise engine core
+## ☑ PHASE 5 — Exercise engine core — **DONE 2026-08-08**
 
 **Entry state:** Phase 4.
 **Required reading:** `04-ARCHITECTURE.md` §4–6, `03-EXERCISE-CATALOG.md` header, `06` §2.

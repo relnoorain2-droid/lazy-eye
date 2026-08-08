@@ -128,6 +128,63 @@ enum ScreenGeometry {
         plausiblePointsPerCM.contains(pointsPerCM)
     }
 
+    // MARK: - Diagonal fallback
+    //
+    // THE CARD CHECK DOES NOT FIT ON EVERY DEVICE, and that is not a bug in the
+    // UI - it is arithmetic. An ID-1 card is 8.56 x 5.398 cm. An iPhone SE
+    // display is 4.98 x 8.85 cm. The card's SHORT edge is wider than the screen,
+    // so at true size it cannot be shown in either orientation. Same for the
+    // iPhone 13 mini and anything smaller.
+    //
+    // So the card check is offered only where it physically fits, and this is the
+    // universal fallback: the user reads the screen diagonal off the spec sheet
+    // (everyone can find "6.1-inch display") and we combine it with the point
+    // resolution the OS reports, which is exact.
+    //
+    //     ppcm = sqrt(w² + h²) / (diagonal_inches × 2.54)
+
+    /// Screen size in POINTS, long side first. Orientation-independent.
+    @MainActor
+    static func pointResolution() -> (long: Double, short: Double) {
+        #if canImport(UIKit)
+        let bounds = UIScreen.main.bounds.size
+        let w = Double(bounds.width), h = Double(bounds.height)
+        return (max(w, h), min(w, h))
+        #else
+        return (0, 0)
+        #endif
+    }
+
+    /// Points per centimetre implied by a stated diagonal in inches.
+    @MainActor
+    static func pointsPerCM(fromDiagonalInches inches: Double) -> Double {
+        guard inches > 0 else { return 0 }
+        let (long, short) = pointResolution()
+        let diagonalPoints = (long * long + short * short).squareRoot()
+        return diagonalPoints / (inches * 2.54)
+    }
+
+    /// Diagonal in inches implied by a points-per-cm value. Used to seed the
+    /// fallback picker from whatever we already detected, so the user is nudging
+    /// a close number rather than starting from nothing.
+    @MainActor
+    static func diagonalInches(forPointsPerCM ppcm: Double) -> Double {
+        guard ppcm > 0 else { return 0 }
+        let (long, short) = pointResolution()
+        let diagonalPoints = (long * long + short * short).squareRoot()
+        return diagonalPoints / ppcm / 2.54
+    }
+
+    /// Every shipping iPhone and iPad diagonal, plus headroom either side.
+    static let plausibleDiagonalInches: ClosedRange<Double> = 3.5...14.0
+
+    /// Longest card edge, in points, that could be drawn at true size on a
+    /// display of this density. Compared against the available space to decide
+    /// whether to offer the card check at all.
+    static func cardLongEdgePoints(atPointsPerCM ppcm: Double) -> Double {
+        ppcm * referenceCardWidthCM
+    }
+
     // MARK: - Device identifier
 
     /// e.g. "iPad13,4". On the simulator, the identifier of the simulated device.
