@@ -1,18 +1,19 @@
 name: Release to TestFlight
 
-# Triggered by pushing a version tag, or manually.
-#
-#   git tag v1.0.0 && git push origin v1.0.0
-#
-# Tests run first. A build that fails its tests must never reach a tester's
-# device — especially on a health app where the tester may be a child.
-
 # Two ways to trigger, both one action:
 #   1. Push a version tag:  git tag v1.0.0 && git push origin v1.0.0
 #   2. Actions tab -> Release to TestFlight -> Run workflow  (no git needed)
 #
-# The beta lane is self-bootstrapping, so there is NO separate signing step.
-# The first run creates the certificates; every run after reuses them.
+# SIGNING: Xcode automatic signing, driven by the App Store Connect API key.
+# There is no fastlane match, no certificates repo, no PAT, no passphrase.
+# xcodebuild asks Apple for the certificate and profile it needs, and creates
+# them if they are missing. See the Fastfile `beta` lane for why.
+#
+# Only THREE secrets are required now:
+#   ASC_KEY_ID  ASC_ISSUER_ID  ASC_KEY_P8
+# MATCH_PASSWORD, MATCH_GIT_URL and MATCH_GIT_AUTH are no longer used and can
+# be deleted from the repository settings.
+
 on:
   push:
     tags: ['v*']
@@ -36,14 +37,6 @@ jobs:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-      # MATCH_GIT_URL and MATCH_GIT_BASIC_AUTHORIZATION are BOTH set by the
-      # preflight step below. Do not declare either here.
-      #
-      # Job-level env wins over anything a step writes to GITHUB_ENV, so
-      # declaring them here silently discarded the working values the preflight
-      # produced. That is why match kept failing to clone even though the
-      # preflight had just proved the token works.
       FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: '120'
 
     steps:
@@ -60,195 +53,32 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      # Release #1 died here with a cryptic fastlane message:
-      #   "Error cloning certificates git repo"
-      #   "fatal: could not read Username for '': terminal prompts disabled"
-      #
-      # MATCH_GIT_BASIC_AUTHORIZATION must be base64("user:token"), and hand-
-      # encoding it is the single most error-prone step in the whole setup —
-      # a trailing newline, a missing username, or encoding only the token all
-      # produce that same unhelpful error.
-      #
-      # So: normalise it here instead of trusting the format, and prove the
-      # clone works BEFORE fastlane runs. A precise failure now beats a vague
-      # one fifteen minutes into a build.
-      - name: Normalise and verify certificates repo access
-        env:
-          RAW_AUTH: ${{ secrets.MATCH_GIT_AUTH }}
-          CERTS_URL: ${{ secrets.MATCH_GIT_URL }}
+      # xcodebuild's -authenticationKeyPath needs a real file on disk, not an
+      # environment variable. Written to the runner only; it dies with the VM.
+      - name: Write App Store Connect API key to disk
         run: |
           set -euo pipefail
 
-          if [ -z "${RAW_AUTH}" ]; then
-            echo "::error::MATCH_GIT_AUTH is empty. Add it in Settings > Secrets and variables > Actions."
-            exit 1
-          fi
-          if [ -z "${CERTS_URL}" ]; then
-            echo "::error::MATCH_GIT_URL is empty."
+          if [ -z "${ASC_KEY_ID}" ] || [ -z "${ASC_ISSUER_ID}" ] || [ -z "${ASC_KEY_P8}" ]; then
+            echo "::error::One of ASC_KEY_ID / ASC_ISSUER_ID / ASC_KEY_P8 is empty."
             exit 1
           fi
 
-          # Strip any whitespace/newlines a copy-paste may have introduced.
-          CLEAN=$(printf '%s' "${RAW_AUTH}" | tr -d '[:space:]')
+          KEY_DIR="${HOME}/private_keys"
+          mkdir -p "${KEY_DIR}"
+          KEY_FILE="${KEY_DIR}/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s\n' "${ASC_KEY_P8}" > "${KEY_FILE}"
+          chmod 600 "${KEY_FILE}"
 
-          # Does it decode to "something:something"? If yes it is already the
-          # base64 form match expects. If not, assume it is a raw PAT and
-          # encode it ourselves with a username. Either input now works.
-          if DECODED=$(printf '%s' "${CLEAN}" | base64 --decode 2>/dev/null) \
-             && printf '%s' "${DECODED}" | grep -q ':'; then
-            echo "MATCH_GIT_AUTH looks like base64(user:token) - using as-is."
-            AUTH="${CLEAN}"
-          else
-            echo "MATCH_GIT_AUTH does not decode to user:token - treating it as a raw token and encoding it."
-            AUTH=$(printf '%s' "x-access-token:${CLEAN}" | base64 | tr -d '\n')
+          # A truncated paste is the classic failure here, and it surfaces much
+          # later as an opaque authentication error. Catch it now.
+          if ! grep -q 'BEGIN PRIVATE KEY' "${KEY_FILE}"; then
+            echo "::error::ASC_KEY_P8 does not contain a private key. Paste the WHOLE .p8 file, including the BEGIN and END lines."
+            exit 1
           fi
 
-          # NOTE: MATCH_GIT_BASIC_AUTHORIZATION is deliberately NOT exported.
-          #
-          # match applies it as `-c http.extraheader='Authorization: Basic ...'`,
-          # and that header OVERRIDES any credentials in the clone URL. Every
-          # previous attempt failed with:
-          #   remote: Invalid username or token. Password authentication is not
-          #           supported for Git operations.
-          # even though the same token authenticates fine against the REST API
-          # and has "Read and Write access to code" on the repo.
-          #
-          # An earlier attempt embedded the token in the URL but left this
-          # header set, so the header still won and nothing changed. This time
-          # the header is dropped entirely and only the URL carries credentials,
-          # which git handles natively.
-          echo "::add-mask::${AUTH}"
-
-          # Report the USERNAME half (safe to print) so a wrong username is
-          # obvious. The token half is never printed.
-          USER_PART=$(printf '%s' "${DECODED:-}" | cut -d: -f1)
-          TOKEN_PART=$(printf '%s' "${DECODED:-}" | cut -d: -f2-)
-          echo "Username in MATCH_GIT_AUTH : '${USER_PART}'"
-          echo "Token length               : ${#TOKEN_PART} characters"
-          case "${TOKEN_PART}" in
-            github_pat_*) echo "Token type                 : fine-grained PAT" ;;
-            ghp_*)        echo "Token type                 : classic PAT" ;;
-            gho_*|ghs_*)  echo "Token type                 : OAuth/app token (unlikely to work here)" ;;
-            *)            echo "Token type                 : UNRECOGNISED - this is probably the problem" ;;
-          esac
-
-          # Ask the GitHub API directly. It distinguishes the failure modes that
-          # `git ls-remote` collapses into one unhelpful message.
-          REPO_PATH=$(printf '%s' "${CERTS_URL}" | sed -E 's#.*github\.com/##; s#\.git$##')
-          echo "Checking API access to ${REPO_PATH} ..."
-          STATUS=$(curl -s -o /tmp/api.json -w '%{http_code}' \
-            -H "Authorization: Bearer ${TOKEN_PART}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${REPO_PATH}" || echo "000")
-
-          echo "GitHub API responded: ${STATUS}"
-          case "${STATUS}" in
-            200)
-              PERMS=$(python3 -c "import json;d=json.load(open('/tmp/api.json'));print(d.get('permissions',{}))" 2>/dev/null || echo "?")
-              echo "Repo visible. Collaborator permissions: ${PERMS}"
-
-              # DO NOT TRUST THE LINE ABOVE AS PROOF OF ACCESS.
-              #
-              # GET /repos/{owner}/{repo} succeeds with only "Metadata: Read",
-              # and the `permissions` block it returns describes what the USER
-              # can do on the repo - not what this TOKEN is permitted to do.
-              # A fine-grained PAT with Metadata-only will happily return 200
-              # here and then fail every git operation with
-              #   "Invalid username or token. Password authentication is not
-              #    supported for Git operations."
-              # which is what wasted several release attempts.
-              #
-              # Cloning needs the CONTENTS permission, so test that endpoint.
-              echo "Checking Contents permission (the one git actually needs)..."
-              C_STATUS=$(curl -s -o /tmp/contents.json -w '%{http_code}' \
-                -H "Authorization: Bearer ${TOKEN_PART}" \
-                -H "Accept: application/vnd.github+json" \
-                "https://api.github.com/repos/${REPO_PATH}/contents/" || echo "000")
-
-              # 200 = has contents. 404 on an EMPTY repo also means access is
-              # fine - there is simply nothing to list yet, which is the normal
-              # state before the first match run.
-              if [ "${C_STATUS}" = "200" ] || [ "${C_STATUS}" = "404" ]; then
-                echo "Contents endpoint returned ${C_STATUS} - token can read repository contents."
-
-                # Give match a URL that carries the credentials itself. With no
-                # Authorization header set, git uses these directly.
-                echo "::add-mask::${TOKEN_PART}"
-                AUTH_URL="https://${USER_PART}:${TOKEN_PART}@github.com/${REPO_PATH}.git"
-                echo "::add-mask::${AUTH_URL}"
-                echo "MATCH_GIT_URL=${AUTH_URL}" >> "$GITHUB_ENV"
-                echo "MATCH_GIT_URL set to an authenticated clone URL (no auth header)."
-
-                # Prove the exact mechanism match will use actually works,
-                # before spending a build on it.
-                echo "Verifying a real clone with these credentials..."
-                if GIT_TERMINAL_PROMPT=0 git ls-remote "${AUTH_URL}" >/dev/null 2>/tmp/git_err.txt; then
-                  echo "Clone credentials verified."
-                else
-                  echo "::error::git still cannot authenticate with credentials in the URL."
-                  sed 's/^/    /' /tmp/git_err.txt || true
-                  echo "The token is valid for the REST API but rejected for git."
-                  echo "Most likely the MATCH_GIT_AUTH secret was built from an OLDER token"
-                  echo "than the one now shown in your GitHub settings - regenerate the base64"
-                  echo "from the CURRENT token value."
-                  exit 1
-                fi
-              else
-                echo "::error::Contents endpoint returned ${C_STATUS}. The token cannot access file contents, so git clone WILL fail."
-                echo ""
-                echo "FIX: github.com/settings/personal-access-tokens -> open your token"
-                echo "  1. Repository access  -> ${REPO_PATH} must be selected"
-                echo "  2. Permissions -> Repository permissions -> Contents -> Read and write"
-                echo "  3. Save"
-                echo ""
-                echo "Fine-grained tokens set Contents to 'No access' by default."
-                echo "Metadata-only is enough to see the repo but NOT to clone it."
-                exit 1
-              fi
-
-              # The git reachability check below is DIAGNOSTIC ONLY and must
-              # never fail the build.
-              #
-              # A previous version exited here when `git ls-remote` failed, and
-              # it blocked a token that the API had just confirmed has admin
-              # access. The check itself was the unreliable part: git on the
-              # runner has its own credential helpers and URL handling, so a
-              # failure here does not mean match will fail. match uses its own
-              # clone logic with the same credentials.
-              #
-              # API 200 + push permission is the authoritative signal. Trust it,
-              # log the git result for information, and let match proceed.
-              echo "--- git reachability (informational) ---"
-              set +e
-              GIT_TERMINAL_PROMPT=0 git \
-                -c http.extraHeader="Authorization: Basic ${AUTH}" \
-                ls-remote "${CERTS_URL}" 2>/tmp/git_err.txt
-              GIT_RC=$?
-              set -e
-              if [ "${GIT_RC}" -eq 0 ]; then
-                echo "git ls-remote succeeded (repo may be empty, which is expected on first run)."
-              else
-                echo "git ls-remote returned ${GIT_RC}. This is informational only. Output was:"
-                sed 's/^/    /' /tmp/git_err.txt || true
-                echo "Continuing anyway - the GitHub API confirmed access."
-              fi
-              echo "----------------------------------------"
-              ;;
-            401)
-              echo "::error::401 Unauthorized - the token is invalid, revoked, or expired. Generate a new one."
-              exit 1 ;;
-            403)
-              echo "::error::403 Forbidden - the token is valid but not permitted on this repo. For a fine-grained token, edit it and add amblyo-certificates under 'Only select repositories', with Contents: Read and write."
-              exit 1 ;;
-            404)
-              echo "::error::404 Not Found - either the repo path is wrong, or (more likely) the fine-grained token does not have amblyo-certificates selected. GitHub returns 404 rather than 403 for repos a token cannot see."
-              echo "Repo path derived from MATCH_GIT_URL: '${REPO_PATH}'"
-              echo "It should be exactly: relnoorain2-droid/amblyo-certificates"
-              exit 1 ;;
-            *)
-              echo "::error::Unexpected response ${STATUS} from the GitHub API."
-              exit 1 ;;
-          esac
+          echo "ASC_KEY_FILE=${KEY_FILE}" >> "$GITHUB_ENV"
+          echo "API key written ($(wc -l < "${KEY_FILE}") lines)."
 
       - uses: ruby/setup-ruby@v1
         with:
@@ -258,14 +88,8 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      # WHY THIS IS OFF BY DEFAULT:
-      # ci.yml already builds and runs the full suite on every push to main, so
-      # by the time you release, this exact commit has been tested. Running it
-      # again cost ~15 minutes of macOS quota per release attempt and made every
-      # signing retry painfully slow.
-      #
-      # Set "run_tests" to true when dispatching if you want the belt-and-braces
-      # run — e.g. releasing a commit that never went through CI.
+      # Off by default: ci.yml already tested this commit on every push to main.
+      # Re-running cost ~15 minutes of macOS quota per release attempt.
       - name: Run tests before shipping (optional)
         if: ${{ inputs.run_tests == true }}
         run: bundle exec fastlane ci

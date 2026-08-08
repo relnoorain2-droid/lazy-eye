@@ -20,7 +20,7 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
     DEVELOPMENT_TEAM: QAT93YWVSF
-    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     ENABLE_MODULE_VERIFIER: YES
     GCC_TREAT_WARNINGS_AS_ERRORS: NO
@@ -56,13 +56,6 @@ targets:
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
         ENABLE_PREVIEWS: YES
-      configs:
-        Debug:
-          PROVISIONING_PROFILE_SPECIFIER: match Development com.amblyo.app
-          CODE_SIGN_IDENTITY: "Apple Development"
-        Release:
-          PROVISIONING_PROFILE_SPECIFIER: match AppStore com.amblyo.app
-          CODE_SIGN_IDENTITY: "Apple Distribution"
     entitlements:
       path: App/Amblyo.entitlements
       properties:

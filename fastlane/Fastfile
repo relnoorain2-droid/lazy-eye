@@ -35,10 +35,7 @@ platform :ios do
   # certificates git repo; it never opens the project. Generating one there
   # just adds a XcodeGen dependency to a workflow that has no reason to
   # install it — which is exactly how Bootstrap Signing #1 failed.
-  LANES_WITHOUT_PROJECT = [:bootstrap].freeze
-
-  before_all do |lane, _options|
-    next if LANES_WITHOUT_PROJECT.include?(lane)
+  before_all do
     Dir.chdir("..") { sh("xcodegen generate") }
   end
 
@@ -73,60 +70,43 @@ platform :ios do
 
   # ---------------------------------------------------------------------------
 
-  desc "ONE TIME ONLY: create the distribution certificate and profiles."
-  lane :bootstrap do
-    match(
-      type: "development",
-      app_identifier: APP_ID,
-      api_key: asc_key,
-      readonly: false,
-      force_for_new_devices: true
-    )
-    match(
-      type: "appstore",
-      app_identifier: APP_ID,
-      api_key: asc_key,
-      readonly: false
-    )
-    UI.success("Certificates and profiles created and pushed to the match repo.")
-    UI.important("Do not run this lane again unless certificates need regenerating.")
-  end
-
   # ---------------------------------------------------------------------------
 
-  desc "Archive and upload to TestFlight. Creates signing assets on first run."
+  desc "Archive and upload to TestFlight using Xcode automatic signing."
   lane :beta do
     key = asc_key
 
-    # readonly: false means this lane is SELF-BOOTSTRAPPING.
+    # NO MATCH. This lane uses Xcode AUTOMATIC SIGNING driven by the App Store
+    # Connect API key.
     #
-    # If the certificates repo is empty, match creates the certificate and
-    # profile and commits them. If they already exist, match just decrypts and
-    # uses them — it does NOT create duplicates. So the separate "run bootstrap
-    # once" step is unnecessary: the first `beta` run does it, every later run
-    # reuses it.
+    # WHY THE CHANGE:
+    # match stores a shared certificate in a private git repo so a TEAM can sign
+    # identically. That is a real problem - for a team. For a solo developer it
+    # is pure overhead, and it added five failure points: a second repo, a PAT,
+    # a base64 encoding of that PAT, an encryption passphrase, and match's own
+    # clone logic. Every single release failure so far came from that chain, not
+    # from the app.
     #
-    # `force: false` is the important guard. match will never revoke an
-    # existing Apple certificate to make room for a new one. If the account is
-    # at Apple's distribution-certificate limit it fails loudly instead of
-    # quietly breaking another app's signing.
-    match(
-      type: "appstore",
-      app_identifier: APP_ID,
-      api_key: key,
-      readonly: false,
-      force: false
-    )
+    # With `-allowProvisioningUpdates` plus the API key, xcodebuild asks Apple
+    # directly for the certificate and profile it needs and creates them if they
+    # are missing. No repo, no PAT, no passphrase, nothing to keep in sync.
+    #
+    # THE TRADE-OFF, STATED HONESTLY:
+    # Automatic signing can create a new distribution certificate per machine,
+    # and Apple caps you at 3. On one developer with one CI provider that is
+    # fine. If a second build service ever needs to sign this app, revisit match
+    # then - deliberately, not as a default.
 
-    # Build numbers must increase monotonically. Reading the latest from
-    # TestFlight rather than a local counter means a failed run never leaves a
-    # gap or a collision.
     latest = latest_testflight_build_number(
       api_key: key,
       app_identifier: APP_ID,
       initial_build_number: 0
     )
     increment_build_number(build_number: latest + 1, xcodeproj: "Amblyo.xcodeproj")
+
+    # xcodebuild needs the key as a FILE. The workflow writes it before this
+    # lane runs and exports ASC_KEY_FILE with the absolute path.
+    key_path = ENV.fetch("ASC_KEY_FILE")
 
     gym(
       project: "Amblyo.xcodeproj",
@@ -135,8 +115,14 @@ platform :ios do
       export_method: "app-store",
       output_directory: "build",
       output_name: "Amblyo.ipa",
+      xcargs: [
+        "-allowProvisioningUpdates",
+        "-authenticationKeyPath #{key_path}",
+        "-authenticationKeyID #{ENV.fetch('ASC_KEY_ID')}",
+        "-authenticationKeyIssuerID #{ENV.fetch('ASC_ISSUER_ID')}"
+      ].join(" "),
       export_options: {
-        provisioningProfiles: { APP_ID => "match AppStore #{APP_ID}" },
+        signingStyle: "automatic",
         teamID: TEAM_ID,
         uploadSymbols: true
       }
