@@ -302,7 +302,10 @@ struct TrackingExerciseTests {
     @Test("Every exercise still passes the photosensitivity audit")
     func allFourteenAreSafe() {
         let violations = FlickerGuard.audit(ExerciseRegistry.all)
+        // Wrapped in an interpolated literal: `#expect`'s message parameter is
+        // `Comment?`, which is ExpressibleByStringInterpolation but will not
+        // accept a plain computed `String`.
         #expect(violations.isEmpty,
-                violations.map(\.description).joined(separator: "; "))
+                "\(violations.map(\.description).joined(separator: "; "))")
     }
 }
