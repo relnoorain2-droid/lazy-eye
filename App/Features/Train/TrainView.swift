@@ -34,6 +34,7 @@ struct TrainView: View {
     /// itself after the first answer and could never finish. Ownership has to
     /// outlive the body evaluation, so it lives in `@State`.
     @State private var runner: SessionRunner?
+    @State private var showingGlassesSetup = false
     @State private var startError: String?
     @State private var secondsUsedToday = 0
     @State private var loadError: String?
@@ -56,6 +57,11 @@ struct TrainView: View {
         .task(id: profile?.id) { refreshUsage() }
         .fullScreenCover(item: $launching) { descriptor in
             sessionScreen(for: descriptor)
+        }
+        .sheet(isPresented: $showingGlassesSetup) {
+            if let profile {
+                AnaglyphCalibrationView(profile: profile) { _ in refreshUsage() }
+            }
         }
     }
 
@@ -89,6 +95,10 @@ struct TrainView: View {
                         title: "Screen not calibrated",
                         message: "Exercise sizes will be approximate until this is set."
                     )
+                }
+
+                if !profile.canUseDichopticTrack {
+                    glassesSetupCard
                 }
 
                 ForEach(availableExercises(for: profile)) { descriptor in
@@ -142,6 +152,25 @@ struct TrainView: View {
                     start(descriptor, profile: profile, cap: cap)
                 }
                 .disabled(cap.isDailyCapReached)
+            }
+        }
+    }
+
+    /// Invitation, not a lock. The two-eye exercises are genuinely unavailable
+    /// without glasses, so the honest thing is to explain how to unlock them
+    /// rather than list them greyed out.
+    private var glassesSetupCard: some View {
+        AmblyoCard(accent: Track.dichoptic.tint) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text("Two-eye exercises")
+                    .font(TypeScale.headline(rounded: theme.usesRoundedFont))
+                Text("These need red-cyan glasses and a one-minute setup. They're the part of the app that trains both eyes to work together.")
+                    .font(TypeScale.callout(rounded: theme.usesRoundedFont))
+                    .foregroundStyle(Color.textSecondary)
+                AmblyoButton(title: "Set up glasses", systemImage: "eyeglasses",
+                             style: .secondary) {
+                    showingGlassesSetup = true
+                }
             }
         }
     }
@@ -255,6 +284,9 @@ struct TrainView: View {
             case ReadingLadderExercise.descriptor.id:
                 ReadingLadderView(runner: runner,
                                   calibration: calibration) { _ in endSession() }
+            case BalanceMeterExercise.descriptor.id:
+                BalanceMeterView(runner: runner,
+                                 calibration: calibration) { _ in endSession() }
             default:
                 GaborOrientationView(runner: runner,
                                      calibration: calibration) { _ in endSession() }
