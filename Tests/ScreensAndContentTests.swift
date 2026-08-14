@@ -14,6 +14,7 @@ import Testing
 import Foundation
 @testable import Amblyo
 
+@MainActor
 @Suite("Session host mapping")
 struct ExerciseSessionScreenTests {
 
@@ -35,6 +36,7 @@ struct ExerciseSessionScreenTests {
     }
 }
 
+@MainActor
 @Suite("Today screen logic")
 struct TodayViewLogicTests {
 
@@ -89,6 +91,7 @@ struct TodayViewLogicTests {
     }
 }
 
+@MainActor
 @Suite("Profile screen logic")
 struct ProfileTabViewLogicTests {
 

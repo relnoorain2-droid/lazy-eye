@@ -51,16 +51,12 @@ final class SettingsStore {
         didSet { defaults.set(themePreference.rawValue, forKey: Self.key("theme")) }
     }
 
+    /// `displayName` and `colorScheme` live in an extension in
+    /// `DesignSystem/Theme.swift`, not here — this type is storage, and the
+    /// words shown to the user are presentation. Adding a second `displayName`
+    /// here is exactly what broke CI run 34.
     enum ThemePreference: String, CaseIterable, Sendable {
         case system, light, dark
-
-        var displayName: String {
-            switch self {
-            case .system: "System"
-            case .light: "Light"
-            case .dark: "Dark"
-            }
-        }
     }
 
     // MARK: Notifications
