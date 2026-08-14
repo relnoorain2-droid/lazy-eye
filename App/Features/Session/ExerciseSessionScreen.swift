@@ -47,6 +47,8 @@ struct ExerciseSessionScreen: View {
         BalanceMeterExercise.descriptor.id,
         DepthPopExercise.descriptor.id,
         BounceExercise.descriptor.id,
+        StackDropExercise.descriptor.id,
+        BalloonPopExercise.descriptor.id,
     ]
 
     var body: some View {
@@ -95,6 +97,10 @@ struct ExerciseSessionScreen: View {
             DepthPopView(runner: runner, calibration: calibration) { _ in onFinish() }
         case BounceExercise.descriptor.id:
             BounceView(runner: runner, calibration: calibration) { _ in onFinish() }
+        case StackDropExercise.descriptor.id:
+            StackDropView(runner: runner, calibration: calibration) { _ in onFinish() }
+        case BalloonPopExercise.descriptor.id:
+            BalloonPopView(runner: runner, calibration: calibration) { _ in onFinish() }
         default:
             GaborOrientationView(runner: runner, calibration: calibration) { _ in onFinish() }
         }

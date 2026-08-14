@@ -118,10 +118,19 @@ struct GamePhysics: Sendable {
 
     /// Advances a body and bounces it off the field's walls.
     ///
-    /// - Parameter bounceBottom: false for games where the bottom edge is a miss
-    ///   rather than a wall.
+    /// EACH EDGE IS OPTIONAL, and that is not over-engineering. Bounce needs the
+    /// bottom open so a missed ball can leave; Balloon Pop needs the TOP open so
+    /// an unpopped balloon can escape. With the top hard-wired as a wall — which
+    /// is how this was first written — a balloon would bounce back down forever
+    /// and the trial could never end in a miss. The game would look fine and
+    /// simply never record a failure, so the staircase would climb until every
+    /// balloon was invisible.
+    ///
+    /// - Parameter bounceBottom: false where the bottom edge is a miss.
+    /// - Parameter bounceTop: false where the top edge is an escape.
     static func step(_ body: Body, in field: GameField,
                      bounceBottom: Bool = true,
+                     bounceTop: Bool = true,
                      timestep: Double = Self.timestep) -> Body {
         var moved = body
         moved.position.x += body.velocity.x * timestep
@@ -136,7 +145,7 @@ struct GamePhysics: Sendable {
             moved.velocity.x = -abs(moved.velocity.x)
         }
 
-        if moved.position.y - radius < 0 {
+        if bounceTop, moved.position.y - radius < 0 {
             moved.position.y = radius
             moved.velocity.y = abs(moved.velocity.y)
         } else if bounceBottom, moved.position.y + radius > GameField.heightDegrees {
