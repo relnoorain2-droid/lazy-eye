@@ -49,7 +49,9 @@ enum ExerciseRegistry {
         HoldTheFusionExercise.descriptor,
         BeadLineExercise.descriptor,
         MazeRunnerExercise.descriptor,
-        RhythmTapExercise.descriptor
+        RhythmTapExercise.descriptor,
+        BalancedViewingExercise.descriptor,
+        StarTracerExercise.descriptor
     ]
 
     static func descriptor(for id: String) -> ExerciseDescriptor? {
@@ -124,6 +126,10 @@ enum ExerciseRegistry {
             return MazeRunnerExercise()
         case RhythmTapExercise.descriptor.id:
             return RhythmTapExercise()
+        case BalancedViewingExercise.descriptor.id:
+            return BalancedViewingExercise()
+        case StarTracerExercise.descriptor.id:
+            return StarTracerExercise()
         default:
             return nil
         }

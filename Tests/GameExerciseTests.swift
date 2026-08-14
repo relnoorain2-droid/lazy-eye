@@ -1120,3 +1120,164 @@ struct RemainingDichopticTests {
         }
     }
 }
+
+// `ExerciseSessionScreen` is `@MainActor`, so reading its static id set needs
+// the suite to be isolated too. Caught by scripts/check_symbols.py before the
+// push rather than by four minutes of macOS CI — which is the whole point of it.
+@MainActor
+@Suite("Balanced Viewing and Star Tracer")
+struct ViewingAndTracerTests {
+
+    private static let smallestPointsPerDegree: Double = 29.8
+
+    // MARK: D1 Balanced Viewing
+
+    @Test("passive viewing is still falsifiable")
+    func viewingHasCheckIns() {
+        // Pure passive viewing cannot be measured: a phone face-down produces
+        // the same data as someone watching intently. The check-in symbol is
+        // what makes the session evidence of anything.
+        #expect(BalancedViewingExercise.secondsBetweenCheckIns > 0)
+        #expect(BalancedViewingExercise.checkInSeconds >= 3,
+                "a check-in shorter than a few seconds tests reaction time")
+        #expect(BalancedViewingExercise.secondsBetweenCheckIns <= 30,
+                "a user who stops looking must be caught within half a minute")
+    }
+
+    @Test("check-in answers are nameable shapes with a known chance level")
+    func checkInIsAnswerable() {
+        let exercise = BalancedViewingExercise()
+        var generator = SeededGenerator(seed: 131)
+        var shapes: Set<Int> = []
+        for _ in 0..<300 {
+            let trial = exercise.makeTrial(difficulty: 0.3, generator: &generator)
+            #expect(StereogramParameters.Shape(rawValue: trial.correctAnswer) != nil)
+            shapes.insert(trial.correctAnswer)
+        }
+        #expect(shapes.count == 4)
+        #expect(BalancedViewingExercise.descriptor.staircase.alternatives == 4)
+    }
+
+    @Test("the scene drifts slowly and stays inside the field")
+    func sceneIsCalmAndContained() {
+        let exercise = BalancedViewingExercise()
+        var generator = SeededGenerator(seed: 137)
+        let trial = exercise.makeTrial(difficulty: 0.3, generator: &generator)
+        var elements = exercise.sceneElements(for: trial)
+        #expect(elements.count == BalancedViewingExercise.sceneElementCount)
+
+        let field = GameField(pointsPerDegree: Self.smallestPointsPerDegree)
+        for _ in 0..<(60 * 30) {
+            elements = elements.map { GamePhysics.step($0, in: field) }
+        }
+        for element in elements {
+            #expect(element.position.x >= element.radius - 1e-6)
+            #expect(element.position.x <= GameField.widthDegrees - element.radius + 1e-6)
+            #expect(element.position.y >= element.radius - 1e-6)
+            #expect(element.position.y <= GameField.heightDegrees - element.radius + 1e-6)
+        }
+        #expect(BalancedViewingExercise.sceneDriftDegreesPerSecond
+                <= GameField.maximumSpeedDegreesPerSecond,
+                "a restful scene must not move faster than the pursuit ceiling")
+    }
+
+    @Test("the longest session in the app is the restful one")
+    func viewingIsTheLongSession() {
+        #expect(BalancedViewingExercise.descriptor.defaultDurationSeconds >= 600)
+        #expect(BalancedViewingExercise.descriptor.minimumAgeGroup == .underFive,
+                "watching a calm scene should be available to the youngest users")
+    }
+
+    // MARK: G5 Star Tracer
+
+    @Test("completing the sequence cannot be confused with tapping a star")
+    func completionIsNotAStarIndex() {
+        // THE BUG THIS EXISTS FOR: the first version reported 0 for "completed",
+        // which is also the index of the first star — so re-tapping star 0 after
+        // joining it would have been scored as finishing the whole sequence.
+        let exercise = StarTracerExercise()
+        var generator = SeededGenerator(seed: 139)
+        for _ in 0..<300 {
+            let trial = exercise.makeTrial(difficulty: 1.0, generator: &generator)
+            let count = exercise.stars(for: trial).count
+            #expect(trial.correctAnswer == count,
+                    "completion must be reported as the star count")
+            #expect(!(0..<count).contains(trial.correctAnswer),
+                    "the completion value collides with a star index")
+        }
+    }
+
+    @Test("every layout places the full number of stars")
+    func starLayoutIsNeverShort() {
+        let exercise = StarTracerExercise()
+        var generator = SeededGenerator(seed: 141)
+        for _ in 0..<200 {
+            let trial = exercise.makeTrial(difficulty: 2.0, generator: &generator)
+            let wanted = Int(trial.payload.value("starCount"))
+            #expect(exercise.stars(for: trial).count == wanted,
+                    "asked for \(wanted) stars")
+        }
+    }
+
+    @Test("stars are separated and tappable")
+    func starsAreSeparatedAndTappable() {
+        let points = StarTracerExercise.starDegrees * Self.smallestPointsPerDegree
+        #expect(points >= 44, "a star is \(points) pt on an iPhone SE")
+
+        let exercise = StarTracerExercise()
+        var generator = SeededGenerator(seed: 143)
+        for _ in 0..<50 {
+            let trial = exercise.makeTrial(difficulty: 1.5, generator: &generator)
+            let stars = exercise.stars(for: trial)
+            for (i, a) in stars.enumerated() {
+                for b in stars[(i + 1)...] {
+                    let distance = ((a.x - b.x) * (a.x - b.x)
+                                    + (a.y - b.y) * (a.y - b.y)).squareRoot()
+                    #expect(distance >= StarTracerExercise.minimumSeparationDegrees - 1e-9)
+                }
+            }
+        }
+    }
+
+    @Test("star count rises with difficulty and stays in bounds")
+    func starCountSchedule() {
+        var previous = 0
+        for ratio in stride(from: 0.0, through: 2.0, by: 0.1) {
+            let count = StarTracerExercise.starCount(
+                for: GameDifficulty(contrastRatio: ratio))
+            #expect(count >= StarTracerExercise.minimumStars)
+            #expect(count <= StarTracerExercise.maximumStars)
+            #expect(count >= previous)
+            previous = count
+        }
+    }
+
+    @Test("a tap on empty space selects no star")
+    func emptyTapSelectsNothing() {
+        let stars = [CGPoint(x: 2, y: 2), CGPoint(x: 6, y: 9)]
+        #expect(StarTracerExercise.star(at: CGPoint(x: 8, y: 1), in: stars) == nil)
+        #expect(StarTracerExercise.star(at: CGPoint(x: 6, y: 9), in: stars) == 1)
+    }
+
+    // MARK: Phase 8 is complete
+
+    @Test("all 32 catalogued exercises are registered and reachable")
+    func catalogueIsComplete() {
+        #expect(ExerciseRegistry.all.count == 32,
+                "\(ExerciseRegistry.all.count) of 32 exercises are registered")
+        let mapped = ExerciseSessionScreen.mappedExerciseIDs
+        for descriptor in ExerciseRegistry.all {
+            #expect(mapped.contains(descriptor.id),
+                    "\(descriptor.id) has no view and would run the wrong exercise")
+            #expect(ExerciseRegistry.make(descriptor.id) != nil,
+                    "\(descriptor.id) has no implementation")
+        }
+    }
+
+    @Test("every track has exercises in it")
+    func everyTrackIsPopulated() {
+        #expect(ExerciseRegistry.available(track: .monocular).count == 14)
+        #expect(ExerciseRegistry.available(track: .dichoptic).count == 10)
+        #expect(ExerciseRegistry.available(track: .game).count == 8)
+    }
+}

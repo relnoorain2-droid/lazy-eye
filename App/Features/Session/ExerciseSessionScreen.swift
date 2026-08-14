@@ -60,6 +60,8 @@ struct ExerciseSessionScreen: View {
         BeadLineExercise.descriptor.id,
         MazeRunnerExercise.descriptor.id,
         RhythmTapExercise.descriptor.id,
+        BalancedViewingExercise.descriptor.id,
+        StarTracerExercise.descriptor.id,
     ]
 
     var body: some View {
@@ -134,6 +136,10 @@ struct ExerciseSessionScreen: View {
             MazeRunnerView(runner: runner, calibration: calibration) { _ in onFinish() }
         case RhythmTapExercise.descriptor.id:
             RhythmTapView(runner: runner, calibration: calibration) { _ in onFinish() }
+        case BalancedViewingExercise.descriptor.id:
+            BalancedViewingView(runner: runner, calibration: calibration) { _ in onFinish() }
+        case StarTracerExercise.descriptor.id:
+            StarTracerView(runner: runner, calibration: calibration) { _ in onFinish() }
         default:
             GaborOrientationView(runner: runner, calibration: calibration) { _ in onFinish() }
         }
