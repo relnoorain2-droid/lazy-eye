@@ -547,3 +547,123 @@ struct HiddenHalfTests {
                 "a session must replay exactly from its seed")
     }
 }
+
+@Suite("Split Match")
+struct SplitMatchTests {
+
+    @Test("neither eye alone can pick the target out")
+    func neitherEyeCanSolveItAlone() {
+        // The premise of the exercise. Each eye sees only its own half of every
+        // card, so the target must NOT be unique in either monocular view — if
+        // it were, one eye would answer correctly every time and the trial would
+        // measure nothing.
+        let exercise = SplitMatchExercise()
+        var generator = SeededGenerator(seed: 17)
+        // Difficulties swept deterministically rather than drawn from the system
+        // RNG. A `Double.random` here would make the test's coverage differ every
+        // run, so a failure could vanish on a re-run — the exact trap that made
+        // two Phase 9 tests flaky.
+        for step in 0..<400 {
+            let difficulty = 0.1 + Double(step % 20) * 0.1
+            let trial = exercise.makeTrial(difficulty: difficulty,
+                                           generator: &generator)
+            let target = exercise.target(for: trial)
+            let options = exercise.options(for: trial)
+
+            let leftMatches = options.filter { $0.leftHalf == target.leftHalf }.count
+            let rightMatches = options.filter { $0.rightHalf == target.rightHalf }.count
+            #expect(leftMatches >= 2,
+                    "the amblyopic eye saw a unique match and can answer alone")
+            #expect(rightMatches >= 2,
+                    "the fellow eye saw a unique match and can answer alone")
+        }
+    }
+
+    @Test("exactly one option is the whole target")
+    func exactlyOneCompleteMatch() {
+        let exercise = SplitMatchExercise()
+        var generator = SeededGenerator(seed: 23)
+        for _ in 0..<300 {
+            let trial = exercise.makeTrial(difficulty: 0.8, generator: &generator)
+            let target = exercise.target(for: trial)
+            let options = exercise.options(for: trial)
+            let complete = options.indices.filter { options[$0] == target }
+            #expect(complete.count == 1, "\(complete.count) options matched entirely")
+            #expect(complete.first == trial.correctAnswer,
+                    "the scored answer is not the matching card")
+        }
+    }
+
+    @Test("every distractor matches on exactly one half")
+    func distractorsMatchOnOneHalf() {
+        // A distractor differing in BOTH halves can be eliminated with one eye,
+        // which reduces the effective number of options and inflates the
+        // guess rate above what the staircase assumes.
+        let exercise = SplitMatchExercise()
+        var generator = SeededGenerator(seed: 29)
+        for _ in 0..<300 {
+            let trial = exercise.makeTrial(difficulty: 1.2, generator: &generator)
+            let target = exercise.target(for: trial)
+            for (index, option) in exercise.options(for: trial).enumerated()
+            where index != trial.correctAnswer {
+                let matchesLeft = option.leftHalf == target.leftHalf
+                let matchesRight = option.rightHalf == target.rightHalf
+                #expect(matchesLeft != matchesRight,
+                        "distractor \(index) matches on \(matchesLeft && matchesRight ? "both" : "neither") half")
+            }
+        }
+    }
+
+    @Test("no two options on screen are identical")
+    func optionsAreDistinct() {
+        // Two identical cards would make the trial unanswerable: both would be
+        // correct and only one is scored so.
+        let exercise = SplitMatchExercise()
+        var generator = SeededGenerator(seed: 37)
+        for _ in 0..<300 {
+            let trial = exercise.makeTrial(difficulty: 1.5, generator: &generator)
+            let options = exercise.options(for: trial)
+            let keys = options.map { "\($0.leftHalf),\($0.rightHalf)" }
+            #expect(Set(keys).count == keys.count, "duplicate cards on screen: \(keys)")
+        }
+    }
+
+    @Test("the layout always has the full number of options")
+    func layoutIsNeverShort() {
+        let exercise = SplitMatchExercise()
+        var generator = SeededGenerator(seed: 41)
+        for _ in 0..<300 {
+            let trial = exercise.makeTrial(difficulty: 2.0, generator: &generator)
+            let wanted = Int(trial.payload.value("optionCount"))
+            #expect(exercise.options(for: trial).count == wanted,
+                    "asked for \(wanted) options")
+        }
+    }
+
+    @Test("option count rises with difficulty and stays in bounds")
+    func optionCountSchedule() {
+        var previous = 0
+        for ratio in stride(from: 0.0, through: 2.0, by: 0.1) {
+            let count = SplitMatchExercise.optionCount(
+                for: GameDifficulty(contrastRatio: ratio))
+            #expect(count >= SplitMatchExercise.minimumOptions)
+            #expect(count <= SplitMatchExercise.maximumOptions)
+            #expect(count >= previous)
+            previous = count
+        }
+    }
+
+    @Test("chance level uses the easiest trial")
+    func chanceUsesTheEasiestTrial() {
+        #expect(SplitMatchExercise.descriptor.staircase.alternatives
+                == SplitMatchExercise.minimumOptions)
+    }
+
+    @Test("the same seed reproduces the same options")
+    func optionsAreDeterministic() {
+        let exercise = SplitMatchExercise()
+        var generator = SeededGenerator(seed: 53)
+        let trial = exercise.makeTrial(difficulty: 1.0, generator: &generator)
+        #expect(exercise.options(for: trial) == exercise.options(for: trial))
+    }
+}

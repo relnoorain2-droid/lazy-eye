@@ -52,6 +52,7 @@ struct ExerciseSessionScreen: View {
         SkyCatchExercise.descriptor.id,
         SpaceDodgeExercise.descriptor.id,
         HiddenHalfExercise.descriptor.id,
+        SplitMatchExercise.descriptor.id,
     ]
 
     var body: some View {
@@ -110,6 +111,8 @@ struct ExerciseSessionScreen: View {
             SpaceDodgeView(runner: runner, calibration: calibration) { _ in onFinish() }
         case HiddenHalfExercise.descriptor.id:
             HiddenHalfView(runner: runner, calibration: calibration) { _ in onFinish() }
+        case SplitMatchExercise.descriptor.id:
+            SplitMatchView(runner: runner, calibration: calibration) { _ in onFinish() }
         default:
             GaborOrientationView(runner: runner, calibration: calibration) { _ in onFinish() }
         }
