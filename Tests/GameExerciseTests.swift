@@ -402,3 +402,148 @@ struct CatchAndDodgeTests {
         }
     }
 }
+
+@Suite("Hidden Half")
+struct HiddenHalfTests {
+
+    private static let smallestPointsPerDegree: Double = 29.8
+
+    @Test("items clear Apple's touch minimum")
+    func itemsAreTappable() {
+        let points = HiddenHalfExercise.itemDegrees * Self.smallestPointsPerDegree
+        #expect(points >= 44, "an item is \(points) pt on an iPhone SE")
+    }
+
+    @Test("every layout places the FULL number of items the difficulty called for")
+    func layoutNeverComesUpShort() {
+        // THE M12 DEFECT, GUARDED. In Phase 6, Find It asked for 40 items on a
+        // field that could hold 27; the sampler quietly returned fewer, so
+        // difficulty stopped rising while the staircase kept climbing and the
+        // reported threshold was for a display that never existed.
+        let exercise = HiddenHalfExercise()
+        var generator = SeededGenerator(seed: 101)
+        for _ in 0..<200 {
+            let trial = exercise.makeTrial(difficulty: 2.0, generator: &generator)
+            let wanted = Int(trial.payload.value("itemCount"))
+            let placed = exercise.layout(for: trial)
+            #expect(placed.count == wanted,
+                    "asked for \(wanted) items, placed \(placed.count)")
+        }
+    }
+
+    @Test("placed items never overlap")
+    func itemsAreSeparated() {
+        let exercise = HiddenHalfExercise()
+        var generator = SeededGenerator(seed: 55)
+        for _ in 0..<50 {
+            let trial = exercise.makeTrial(difficulty: 1.5, generator: &generator)
+            let items = exercise.layout(for: trial)
+            for (i, a) in items.enumerated() {
+                for b in items[(i + 1)...] {
+                    let dx = a.position.x - b.position.x
+                    let dy = a.position.y - b.position.y
+                    let distance = (dx * dx + dy * dy).squareRoot()
+                    #expect(distance >= HiddenHalfExercise.minimumSeparationDegrees - 1e-9,
+                            "two items are \(distance) deg apart")
+                }
+            }
+        }
+    }
+
+    @Test("items stay inside the field")
+    func itemsStayInBounds() {
+        let exercise = HiddenHalfExercise()
+        var generator = SeededGenerator(seed: 71)
+        let radius = HiddenHalfExercise.itemDegrees / 2
+        for _ in 0..<50 {
+            let trial = exercise.makeTrial(difficulty: 1.0, generator: &generator)
+            for item in exercise.layout(for: trial) {
+                #expect(item.position.x >= radius - 1e-9)
+                #expect(item.position.x <= GameField.widthDegrees - radius + 1e-9)
+                #expect(item.position.y >= radius - 1e-9)
+                #expect(item.position.y <= GameField.heightDegrees - radius + 1e-9)
+            }
+        }
+    }
+
+    @Test("exactly one item is the target, and it is the scored answer")
+    func exactlyOneTarget() {
+        let exercise = HiddenHalfExercise()
+        var generator = SeededGenerator(seed: 33)
+        for _ in 0..<200 {
+            let trial = exercise.makeTrial(difficulty: 0.8, generator: &generator)
+            let items = exercise.layout(for: trial)
+            let targets = items.indices.filter { items[$0].isTarget }
+            #expect(targets.count == 1, "\(targets.count) items had both marks")
+            #expect(targets.first == trial.correctAnswer,
+                    "the scored answer is not the item carrying both marks")
+        }
+    }
+
+    @Test("neither eye alone can identify the target")
+    func neitherEyeCanSolveItAlone() {
+        // The whole premise. If only one item had a ring, the amblyopic eye
+        // would find the target by itself; if only one had a dot, the fellow eye
+        // would. Both monocular views must contain SEVERAL candidates.
+        let exercise = HiddenHalfExercise()
+        var generator = SeededGenerator(seed: 44)
+        for _ in 0..<200 {
+            let trial = exercise.makeTrial(difficulty: 1.0, generator: &generator)
+            let items = exercise.layout(for: trial)
+            let ringed = items.filter(\.hasRing).count
+            let dotted = items.filter(\.hasDot).count
+            #expect(ringed >= 2, "only \(ringed) item(s) had a ring — one eye solves it")
+            #expect(dotted >= 2, "only \(dotted) item(s) had a dot — one eye solves it")
+        }
+    }
+
+    @Test("item count rises with difficulty and stays inside its bounds")
+    func itemCountSchedule() {
+        var previous = 0
+        for ratio in stride(from: 0.0, through: 2.0, by: 0.1) {
+            let count = HiddenHalfExercise.itemCount(
+                for: GameDifficulty(contrastRatio: ratio))
+            #expect(count >= HiddenHalfExercise.minimumItems)
+            #expect(count <= HiddenHalfExercise.maximumItems)
+            #expect(count >= previous, "the count must never fall as difficulty rises")
+            previous = count
+        }
+    }
+
+    @Test("chance level is set by the EASIEST trial, not the average")
+    func chanceLevelUsesTheWorstCase() {
+        // With 4 items a guesser is right 25% of the time and with 12 only 8%.
+        // The staircase takes one `alternatives`, so it has to be the easiest
+        // trial's count or a lucky guesser reads as a performer.
+        #expect(HiddenHalfExercise.descriptor.staircase.alternatives
+                == HiddenHalfExercise.minimumItems)
+    }
+
+    @Test("a tap on empty space selects nothing")
+    func tapOnEmptySpaceIsIgnored() {
+        // Scoring a stray tap would make the threshold partly a measure of
+        // dexterity rather than of vision.
+        let items = [HiddenHalfExercise.Item(position: CGPoint(x: 2, y: 2),
+                                             hasRing: true, hasDot: true)]
+        #expect(HiddenHalfExercise.item(at: CGPoint(x: 7, y: 9), in: items) == nil)
+    }
+
+    @Test("a tap on an item selects that item")
+    func tapSelectsTheItem() {
+        let items = [
+            HiddenHalfExercise.Item(position: CGPoint(x: 2, y: 2), hasRing: true, hasDot: false),
+            HiddenHalfExercise.Item(position: CGPoint(x: 6, y: 8), hasRing: true, hasDot: true),
+        ]
+        #expect(HiddenHalfExercise.item(at: CGPoint(x: 6, y: 8), in: items) == 1)
+        #expect(HiddenHalfExercise.item(at: CGPoint(x: 2, y: 2), in: items) == 0)
+    }
+
+    @Test("the same seed reproduces the same layout")
+    func layoutIsDeterministic() {
+        let exercise = HiddenHalfExercise()
+        var generator = SeededGenerator(seed: 9)
+        let trial = exercise.makeTrial(difficulty: 1.0, generator: &generator)
+        #expect(exercise.layout(for: trial) == exercise.layout(for: trial),
+                "a session must replay exactly from its seed")
+    }
+}
