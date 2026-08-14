@@ -35,6 +35,8 @@ struct TrainView: View {
     /// outlive the body evaluation, so it lives in `@State`.
     @State private var runner: SessionRunner?
     @State private var showingGlassesSetup = false
+    @State private var showingSelfCheck = false
+    @State private var paywallContext: PaywallView.Context?
     @State private var startError: String?
     @State private var secondsUsedToday = 0
     @State private var loadError: String?
@@ -61,6 +63,15 @@ struct TrainView: View {
         .sheet(isPresented: $showingGlassesSetup) {
             if let profile {
                 AnaglyphCalibrationView(profile: profile) { _ in refreshUsage() }
+            }
+        }
+        .sheet(isPresented: $showingSelfCheck) {
+            AnaglyphSelfCheckView(calibration: profile?.calibration)
+        }
+        .sheet(item: $paywallContext) { context in
+            PaywallView(context: context,
+                        isKidsMode: profile?.isKidsMode ?? false) { _ in
+                refreshUsage()
             }
         }
     }
@@ -99,6 +110,10 @@ struct TrainView: View {
 
                 if !profile.canUseDichopticTrack {
                     glassesSetupCard
+                } else {
+                    Button("Check my glasses are working") { showingSelfCheck = true }
+                        .font(TypeScale.caption(rounded: theme.usesRoundedFont))
+                        .tint(.brandPrimary)
                 }
 
                 ForEach(availableExercises(for: profile)) { descriptor in
@@ -182,21 +197,30 @@ struct TrainView: View {
                 .padding(.top, Spacing.md)
 
             ForEach(locked) { descriptor in
-                AmblyoCard {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(descriptor.title)
-                                .font(TypeScale.callout(rounded: theme.usesRoundedFont).weight(.semibold))
-                            Text(descriptor.summary)
-                                .font(TypeScale.caption(rounded: theme.usesRoundedFont))
+                Button {
+                    // A locked row that does nothing is a dead end. Tapping one
+                    // opens the paywall in the context of the exercise the
+                    // person actually wanted.
+                    paywallContext = .exercise(descriptor.title)
+                } label: {
+                    AmblyoCard {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(descriptor.title)
+                                    .font(TypeScale.callout(rounded: theme.usesRoundedFont).weight(.semibold))
+                                    .foregroundStyle(Color.textPrimary)
+                                Text(descriptor.summary)
+                                    .font(TypeScale.caption(rounded: theme.usesRoundedFont))
+                                    .foregroundStyle(Color.textSecondary)
+                            }
+                            Spacer()
+                            Image(systemName: "lock")
                                 .foregroundStyle(Color.textSecondary)
                         }
-                        Spacer()
-                        Image(systemName: "lock")
-                            .foregroundStyle(Color.textSecondary)
-                            .accessibilityLabel("Requires a subscription")
                     }
                 }
+                .buttonStyle(PressableButtonStyle())
+                .accessibilityLabel("\(descriptor.title), requires a subscription")
             }
         }
     }
@@ -235,62 +259,13 @@ struct TrainView: View {
     @ViewBuilder
     private func sessionScreen(for descriptor: ExerciseDescriptor) -> some View {
         if let runner, let profile {
-            let calibration = profile.calibration ?? CalibrationProfile()
-
-            // Every exercise that is "look at a stimulus, tap which one" shares
-            // ChoiceExerciseView, so the fatigue button, break card and honest
-            // summary exist in exactly one place. M1 still has its own view for
-            // now; it will fold into the shell when its presenter is written.
-            switch descriptor.id {
-            case LandoltRingsExercise.descriptor.id:
-                ChoiceExerciseView(runner: runner, calibration: calibration,
-                                   presenter: LandoltPresenter()) { _ in endSession() }
-            case ContrastHuntExercise.descriptor.id:
-                ChoiceExerciseView(runner: runner, calibration: calibration,
-                                   presenter: ContrastHuntPresenter()) { _ in endSession() }
-            case VernierExercise.descriptor.id:
-                ChoiceExerciseView(runner: runner, calibration: calibration,
-                                   presenter: VernierPresenter()) { _ in endSession() }
-            case GlassPatternExercise.descriptor.id:
-                ChoiceExerciseView(runner: runner, calibration: calibration,
-                                   presenter: GlassPatternPresenter()) { _ in endSession() }
-            case CrowdedGaborExercise.descriptor.id:
-                ChoiceExerciseView(runner: runner, calibration: calibration,
-                                   presenter: CrowdedGaborPresenter()) { _ in endSession() }
-            case CrowdedLettersExercise.descriptor.id:
-                ChoiceExerciseView(runner: runner, calibration: calibration,
-                                   presenter: CrowdedLettersPresenter()) { _ in endSession() }
-
-            // These two cannot use the shared shell: one animates, one takes its
-            // answer from a tap location rather than a button.
-            case MotionFieldExercise.descriptor.id:
-                MotionFieldView(runner: runner,
-                                calibration: calibration) { _ in endSession() }
-            case FindItExercise.descriptor.id:
-                FindItView(runner: runner,
-                           calibration: calibration) { _ in endSession() }
-            case SmoothPursuitExercise.descriptor.id:
-                SmoothPursuitView(runner: runner,
-                                  calibration: calibration) { _ in endSession() }
-            case JumpTargetsExercise.descriptor.id:
-                JumpTargetsView(runner: runner,
-                                calibration: calibration) { _ in endSession() }
-            case HartChartExercise.descriptor.id:
-                HartChartView(runner: runner,
-                              calibration: calibration) { _ in endSession() }
-            case PathTracerExercise.descriptor.id:
-                PathTracerView(runner: runner,
-                               calibration: calibration) { _ in endSession() }
-            case ReadingLadderExercise.descriptor.id:
-                ReadingLadderView(runner: runner,
-                                  calibration: calibration) { _ in endSession() }
-            case BalanceMeterExercise.descriptor.id:
-                BalanceMeterView(runner: runner,
-                                 calibration: calibration) { _ in endSession() }
-            default:
-                GaborOrientationView(runner: runner,
-                                     calibration: calibration) { _ in endSession() }
-            }
+            // The id-to-view mapping lives in ExerciseSessionScreen so Today and
+            // Train cannot disagree about which view runs which exercise.
+            ExerciseSessionScreen(
+                runner: runner,
+                descriptor: descriptor,
+                calibration: profile.calibration ?? CalibrationProfile(),
+                onFinish: endSession)
         } else {
             // Unreachable: `launching` is only set after `runner` is built.
             // Present rather than crash, and close the cover so the user is not

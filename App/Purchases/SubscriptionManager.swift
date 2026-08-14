@@ -110,4 +110,104 @@ final class SubscriptionManager {
             }
         }
     }
+
+    // MARK: - Purchasing
+
+    enum PurchaseOutcome: Equatable, Sendable {
+        case purchased
+        /// The user backed out. NOT an error, and must never show one.
+        case cancelled
+        /// Ask to Buy: a parent has to approve. The purchase may complete
+        /// minutes or days later, which is exactly why `Transaction.updates` is
+        /// listened to from launch rather than only while the paywall is open.
+        case pending
+        case failed(String)
+    }
+
+    private(set) var isPurchasing = false
+
+    func purchase(_ product: Product) async -> PurchaseOutcome {
+        guard !isPurchasing else { return .cancelled }
+        isPurchasing = true
+        defer { isPurchasing = false }
+
+        do {
+            switch try await product.purchase() {
+            case .success(let verification):
+                guard case .verified(let transaction) = verification else {
+                    // A failed signature check means the receipt is not
+                    // trustworthy. Granting access anyway is how apps get
+                    // trivially pirated, so this is a refusal, not a warning.
+                    Self.log.error("Unverified transaction for \(product.id, privacy: .public)")
+                    return .failed("That purchase couldn't be verified.")
+                }
+                await transaction.finish()
+                await refreshEntitlements()
+                return .purchased
+
+            case .userCancelled:
+                return .cancelled
+
+            case .pending:
+                return .pending
+
+            @unknown default:
+                return .failed("Something unexpected happened.")
+            }
+        } catch {
+            Self.log.error("Purchase failed: \(error.localizedDescription)")
+            return .failed(error.localizedDescription)
+        }
+    }
+
+    /// Restore. Apple requires a visible restore control on any paywall, and a
+    /// user who reinstalls must get their subscription back without paying
+    /// twice — a 3.1.1 rejection otherwise.
+    func restore() async -> Bool {
+        do {
+            try await AppStore.sync()
+        } catch {
+            // A sync failure is often just a cancelled sign-in sheet, so it is
+            // logged rather than surfaced. Entitlements are refreshed regardless
+            // because the local receipt may already be sufficient.
+            Self.log.info("AppStore.sync: \(error.localizedDescription)")
+        }
+        await refreshEntitlements()
+        return status.isPro
+    }
+
+    // MARK: - Display helpers
+
+    /// Price per week, for honest comparison across terms. Apple requires the
+    /// price and period to be clear; showing "$29.99" next to "$2.99" without
+    /// this makes the yearly plan look worse than it is.
+    func weeklyEquivalent(for product: Product) -> String? {
+        guard let period = product.subscription?.subscriptionPeriod else { return nil }
+        let weeks: Decimal
+        switch period.unit {
+        case .day: weeks = Decimal(period.value) / 7
+        case .week: weeks = Decimal(period.value)
+        case .month: weeks = Decimal(period.value) * 52 / 12
+        case .year: weeks = Decimal(period.value) * 52
+        @unknown default: return nil
+        }
+        guard weeks > 0 else { return nil }
+        let perWeek = product.price / weeks
+        return product.priceFormatStyle.format(perWeek)
+    }
+
+    /// Free-trial length, if this product offers one.
+    func introductoryOffer(for product: Product) -> String? {
+        guard let offer = product.subscription?.introductoryOffer,
+              offer.paymentMode == .freeTrial else { return nil }
+        let unit: String
+        switch offer.period.unit {
+        case .day: unit = offer.period.value == 1 ? "day" : "days"
+        case .week: unit = offer.period.value == 1 ? "week" : "weeks"
+        case .month: unit = offer.period.value == 1 ? "month" : "months"
+        case .year: unit = offer.period.value == 1 ? "year" : "years"
+        @unknown default: return nil
+        }
+        return "\(offer.period.value) \(unit) free"
+    }
 }

@@ -279,7 +279,14 @@ struct TrackingExerciseTests {
 
     @Test("Every registered exercise is constructible and produces valid trials")
     func registryIsComplete() {
-        #expect(ExerciseRegistry.all.count == 14)
+        // Counts the MONOCULAR pack specifically, not the whole registry.
+        //
+        // This was `all.count == 14` and broke the moment the first dichoptic
+        // exercise was added — a test that fails on correct work is worse than
+        // no test. Phase 6 delivering all 14 monocular exercises is the fact
+        // worth pinning; the total grows through Phase 8 by design.
+        #expect(ExerciseRegistry.available(track: .monocular).count == 14,
+                "the monocular pack should be complete at 14")
 
         for descriptor in ExerciseRegistry.all {
             guard let exercise = ExerciseRegistry.make(descriptor.id) else {

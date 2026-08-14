@@ -4,9 +4,9 @@
 //
 //  Entry point. See docs/04-ARCHITECTURE.md and docs/02-PRD.md section 4.
 //
-//  PHASE 1 SCAFFOLD: the tab shell and app-level wiring are real; every feature
-//  view is a placeholder that Phase 2+ replaces. The launch-order comments below
-//  are load-bearing — read them before reordering anything in `body`.
+//  The launch-order comments in `body` are load-bearing — audio configuration
+//  and StoreKit transaction listening both have to happen before the first UI
+//  frame, for reasons written next to each. Read them before reordering.
 //
 
 import SwiftUI
@@ -15,8 +15,7 @@ import SwiftData
 @main
 struct AmblyoApp: App {
 
-    /// Shared model container. Phase 2 replaces the schema with the real models
-    /// from docs/04-ARCHITECTURE.md section 3.
+    /// Shared model container. Schema in docs/04-ARCHITECTURE.md section 3.
     let modelContainer: ModelContainer
 
     /// Audio must be configured before ANY view appears, because every channel
@@ -155,27 +154,12 @@ struct MainTabView: View {
     @ViewBuilder
     private func destination(for tab: Tab) -> some View {
         switch tab {
-        case .today:    PlaceholderView(tab: .today)
+        case .today:    TodayView()
         case .train:    TrainView()
         case .progress: ProgressDashboardView()
-        case .learn:    PlaceholderView(tab: .learn)
-        case .profile:  PlaceholderView(tab: .profile)
+        case .learn:    LearnView()
+        case .profile:  ProfileTabView()
         }
-    }
-}
-
-// MARK: - Phase 1 placeholders (deleted in Phase 2/3)
-
-struct PlaceholderView: View {
-    let tab: MainTabView.Tab
-
-    var body: some View {
-        ContentUnavailableView {
-            Label(tab.title, systemImage: tab.systemImage)
-        } description: {
-            Text("Phase 1 scaffold. See docs/13-BUILD-ROADMAP.md.")
-        }
-        .navigationTitle(tab.title)
     }
 }
 
