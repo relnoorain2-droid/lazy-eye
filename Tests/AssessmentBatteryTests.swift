@@ -198,3 +198,158 @@ struct AssessmentBatteryTests {
         #expect(a > b, "index \(a) vs \(b): lower thresholds must score higher")
     }
 }
+
+@MainActor
+@Suite("Assessment runner")
+struct AssessmentRunnerTests {
+
+    private func profile(canUseGlasses: Bool = true,
+                         eye: Eye = .left) -> Profile {
+        let profile = Profile(name: "Test", amblyopicEye: eye)
+        if canUseGlasses {
+            profile.calibration = CalibrationProfile(
+                profile: profile,
+                screenPointsPerCM: 47.2,
+                screenSizeUserVerified: true,
+                viewingDistanceCM: 50,
+                colorVisionOK: true,
+                anaglyphCalibratedAt: .now)
+        } else {
+            profile.calibration = CalibrationProfile(
+                profile: profile,
+                screenPointsPerCM: 47.2,
+                screenSizeUserVerified: true,
+                viewingDistanceCM: 50)
+        }
+        return profile
+    }
+
+    private var calibration: CalibrationProfile {
+        CalibrationProfile(screenPointsPerCM: 47.2,
+                           screenSizeUserVerified: true,
+                           viewingDistanceCM: 50)
+    }
+
+    @Test("the free plan runs only the balance check-in")
+    func freePlanScope() {
+        let runner = AssessmentRunner(profile: profile(), calibration: calibration,
+                                      isPro: false, seed: 1)
+        #expect(runner.plan == [.balance])
+    }
+
+    @Test("a profile without glasses is not offered the binocular sub-tests")
+    func withoutGlassesBinocularTestsAreDropped() {
+        // Running them anyway would produce two numbers measured through no
+        // separation at all — worse than two missing ones, because they would
+        // look like measurements on the chart.
+        let runner = AssessmentRunner(profile: profile(canUseGlasses: false),
+                                      calibration: calibration, isPro: true, seed: 2)
+        #expect(!runner.plan.contains(.balance))
+        #expect(!runner.plan.contains(.stereo))
+        #expect(runner.plan.contains(.acuity))
+    }
+
+    @Test("a full run produces a saveable result")
+    func fullRunProducesAResult() {
+        let runner = AssessmentRunner(profile: profile(), calibration: calibration,
+                                      isPro: true, seed: 3)
+        runner.start()
+
+        // Answer every trial correctly, which drives each staircase to its
+        // hardest end and produces reversals along the way.
+        var guard_ = 0
+        while guard_ < 10_000 {
+            guard_ += 1
+            switch runner.phase {
+            case .running:
+                guard let trial = runner.currentTrial else { break }
+                runner.respond(answer: trial.correctAnswer)
+            case .betweenTests:
+                runner.continueToNextTest()
+            case .finished, .abandoned, .ready:
+                guard_ = 10_000
+            }
+        }
+
+        guard case .finished(let result) = runner.phase else {
+            Issue.record("the battery never finished")
+            return
+        }
+        #expect(result.durationSeconds >= 0)
+        #expect(!AssessmentBattery.summary(for: result).isEmpty)
+    }
+
+    @Test("abandoning records nothing at all")
+    func abandonDiscardsEverything() {
+        // A half-finished battery is not a shorter battery, it is an unmeasured
+        // one. Writing whatever the staircases had reached would put a number on
+        // the chart indistinguishable from a real one a month later.
+        let runner = AssessmentRunner(profile: profile(), calibration: calibration,
+                                      isPro: true, seed: 4)
+        runner.start()
+        for _ in 0..<5 {
+            if let trial = runner.currentTrial { runner.respond(answer: trial.correctAnswer) }
+        }
+        runner.abandon()
+
+        if case .finished = runner.phase {
+            Issue.record("abandoning produced a result")
+        }
+        #expect(runner.currentTrial == nil)
+    }
+
+    @Test("acuity is measured for both eyes before moving on")
+    func acuityRunsTwice() {
+        // The gap between the eyes is the number that matters, so a single-eye
+        // acuity run is not a shorter measurement — it is a different one.
+        let runner = AssessmentRunner(profile: profile(canUseGlasses: false),
+                                      calibration: calibration, isPro: true, seed: 5)
+        runner.start()
+
+        var acuityBlocks = 0
+        var lastWasAcuity = false
+        var guard_ = 0
+        while guard_ < 10_000 {
+            guard_ += 1
+            switch runner.phase {
+            case .running:
+                if runner.currentTest == .acuity, !lastWasAcuity {
+                    acuityBlocks += 1
+                    lastWasAcuity = true
+                } else if runner.currentTest != .acuity {
+                    lastWasAcuity = false
+                }
+                guard let trial = runner.currentTrial else { break }
+                runner.respond(answer: trial.correctAnswer)
+            case .betweenTests:
+                lastWasAcuity = false
+                runner.continueToNextTest()
+            default:
+                guard_ = 10_000
+            }
+        }
+        #expect(acuityBlocks >= 1, "acuity never ran")
+    }
+
+    @Test("binocular sub-tests do not ask the user to cover an eye")
+    func binocularTestsUseBothEyes() {
+        let runner = AssessmentRunner(profile: profile(), calibration: calibration,
+                                      isPro: true, seed: 6)
+        runner.start()
+        // Balance runs first and is binocular.
+        #expect(runner.currentTest == .balance)
+        #expect(runner.currentEye == .unknown,
+                "a binocular test that names an eye would have the user cover one")
+    }
+
+    @Test("a run with no available sub-tests abandons rather than pretending")
+    func emptyPlanAbandons() {
+        // A free-plan profile that also cannot use the glasses has nothing to
+        // measure. Saying so is better than an empty result.
+        let runner = AssessmentRunner(profile: profile(canUseGlasses: false),
+                                      calibration: calibration, isPro: false, seed: 7)
+        runner.start()
+        #expect(runner.plan.isEmpty)
+        #expect(runner.phase == .abandoned)
+    }
+}

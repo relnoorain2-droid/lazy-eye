@@ -48,6 +48,7 @@ struct TodayView: View {
     /// session after the first answer.
     @State private var runner: SessionRunner?
     @State private var launching: ExerciseDescriptor?
+    @State private var showingAssessment = false
 
     private var profile: Profile? { activeProfiles.first }
 
@@ -66,6 +67,11 @@ struct TodayView: View {
         .task(id: profile?.id) { reload() }
         .fullScreenCover(item: $launching) { descriptor in
             sessionScreen(for: descriptor)
+        }
+        .sheet(isPresented: $showingAssessment) {
+            if let profile {
+                AssessmentView(profile: profile) { reload() }
+            }
         }
     }
 
@@ -270,9 +276,11 @@ struct TodayView: View {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text("Check-in available")
                     .font(TypeScale.headline(rounded: theme.usesRoundedFont))
-                Text("It's been four weeks since your last check-in. The Progress tab compares blocks of practice, so a fresh set of measurements is what gives it something honest to compare against.")
+                Text("It's been four weeks since your last check-in. About \(AssessmentBattery.estimatedSeconds / 60) minutes of measurements — this is what the Progress screen compares over time.")
                     .font(TypeScale.callout(rounded: theme.usesRoundedFont))
                     .foregroundStyle(Color.textSecondary)
+                AmblyoButton(title: "Start check-in", systemImage: "checklist",
+                             style: .secondary) { showingAssessment = true }
             }
         }
     }
