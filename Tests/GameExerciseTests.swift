@@ -667,3 +667,147 @@ struct SplitMatchTests {
         #expect(exercise.options(for: trial) == exercise.options(for: trial))
     }
 }
+
+@Suite("Peekaboo and Colour Sort")
+struct PeekabooAndSortTests {
+
+    private static let smallestPointsPerDegree: Double = 29.8
+
+    // MARK: G3 Peekaboo
+
+    @Test("burrows are comfortably tappable on the smallest screen")
+    func burrowsAreTappable() {
+        let points = PeekabooExercise.burrowDegrees * Self.smallestPointsPerDegree
+        #expect(points >= 44, "a burrow is \(points) pt on an iPhone SE")
+    }
+
+    @Test("the burrow grid fits the field without overlapping")
+    func burrowsFitTheField() {
+        let radius = PeekabooExercise.burrowDegrees / 2
+        for index in 0..<PeekabooExercise.burrowCount {
+            let centre = PeekabooExercise.centre(ofBurrow: index)
+            #expect(centre.x - radius >= -1e-9)
+            #expect(centre.x + radius <= GameField.widthDegrees + 1e-9)
+            #expect(centre.y - radius >= -1e-9)
+            #expect(centre.y + radius <= GameField.heightDegrees + 1e-9)
+        }
+        // And no two burrows overlap.
+        for a in 0..<PeekabooExercise.burrowCount {
+            for b in (a + 1)..<PeekabooExercise.burrowCount {
+                let p = PeekabooExercise.centre(ofBurrow: a)
+                let q = PeekabooExercise.centre(ofBurrow: b)
+                let distance = ((p.x - q.x) * (p.x - q.x)
+                                + (p.y - q.y) * (p.y - q.y)).squareRoot()
+                #expect(distance >= PeekabooExercise.burrowDegrees,
+                        "burrows \(a) and \(b) overlap")
+            }
+        }
+    }
+
+    @Test("the creature is always up long enough for a small child")
+    func creatureIsVisibleLongEnough() {
+        for ratio in stride(from: 0.0, through: 2.0, by: 0.1) {
+            let seconds = PeekabooExercise.secondsVisible(
+                for: GameDifficulty(contrastRatio: ratio))
+            #expect(seconds >= PeekabooExercise.shortestVisible - 1e-9,
+                    "ratio \(ratio) gives \(seconds) s")
+            #expect(seconds <= PeekabooExercise.longestVisible + 1e-9)
+        }
+    }
+
+    @Test("the creature's time on screen shortens as difficulty rises")
+    func visibleTimeShortens() {
+        let easy = PeekabooExercise.secondsVisible(for: GameDifficulty(contrastRatio: 0.1))
+        let hard = PeekabooExercise.secondsVisible(for: GameDifficulty(contrastRatio: 1.0))
+        #expect(easy > hard)
+    }
+
+    @Test("every burrow is used")
+    func everyBurrowIsUsed() {
+        let exercise = PeekabooExercise()
+        var generator = SeededGenerator(seed: 63)
+        var seen: Set<Int> = []
+        for _ in 0..<400 {
+            seen.insert(exercise.burrow(
+                for: exercise.makeTrial(difficulty: 0.4, generator: &generator)))
+        }
+        #expect(seen.count == PeekabooExercise.burrowCount,
+                "only \(seen.count) of \(PeekabooExercise.burrowCount) burrows appeared")
+    }
+
+    @Test("a tap on the right burrow counts, one elsewhere does not")
+    func tapHitsTheRightBurrow() {
+        let centre = PeekabooExercise.centre(ofBurrow: 0)
+        #expect(PeekabooExercise.tapped(at: centre, burrow: 0))
+        #expect(!PeekabooExercise.tapped(at: PeekabooExercise.centre(ofBurrow: 5),
+                                         burrow: 0))
+    }
+
+    // MARK: G6 Colour Sort
+
+    @Test("matching and non-matching trials are evenly balanced")
+    func answersAreBalanced() {
+        // Unbalanced and a user could beat chance by always saying "different",
+        // which the staircase would read as performance.
+        let exercise = ColourSortExercise()
+        var generator = SeededGenerator(seed: 67)
+        var same = 0
+        let total = 1_000
+        for _ in 0..<total {
+            let trial = exercise.makeTrial(difficulty: 0.5, generator: &generator)
+            if trial.correctAnswer == ColourSortExercise.Answer.same.rawValue { same += 1 }
+        }
+        let ratio = Double(same) / Double(total)
+        #expect(abs(ratio - 0.5) < 0.08, "\(Int(ratio * 100))% of trials were matches")
+    }
+
+    @Test("the marks agree with the scored answer")
+    func marksMatchTheAnswer() {
+        let exercise = ColourSortExercise()
+        var generator = SeededGenerator(seed: 71)
+        for _ in 0..<1_000 {
+            let trial = exercise.makeTrial(difficulty: 0.5, generator: &generator)
+            let identical = exercise.leftMark(for: trial) == exercise.rightMark(for: trial)
+            let scoredSame = trial.correctAnswer == ColourSortExercise.Answer.same.rawValue
+            #expect(identical == scoredSame,
+                    "marks \(exercise.leftMark(for: trial))/\(exercise.rightMark(for: trial)) scored as \(scoredSame ? "same" : "different")")
+        }
+    }
+
+    @Test("marks stay inside the available set")
+    func marksAreInRange() {
+        let exercise = ColourSortExercise()
+        var generator = SeededGenerator(seed: 73)
+        for _ in 0..<500 {
+            let trial = exercise.makeTrial(difficulty: 1.0, generator: &generator)
+            #expect((0..<ColourSortExercise.markCount).contains(exercise.leftMark(for: trial)))
+            #expect((0..<ColourSortExercise.markCount).contains(exercise.rightMark(for: trial)))
+        }
+    }
+
+    @Test("every mark value is used on both sides")
+    func marksCoverTheSet() {
+        let exercise = ColourSortExercise()
+        var generator = SeededGenerator(seed: 79)
+        var lefts: Set<Int> = []
+        var rights: Set<Int> = []
+        for _ in 0..<600 {
+            let trial = exercise.makeTrial(difficulty: 1.0, generator: &generator)
+            lefts.insert(exercise.leftMark(for: trial))
+            rights.insert(exercise.rightMark(for: trial))
+        }
+        #expect(lefts.count == ColourSortExercise.markCount)
+        #expect(rights.count == ColourSortExercise.markCount)
+    }
+
+    @Test("both new games report on the balance scale")
+    func newGamesShareTheScale() {
+        let reference = BalanceMeterExercise.descriptor.staircase
+        for staircase in [PeekabooExercise.descriptor.staircase,
+                          ColourSortExercise.descriptor.staircase] {
+            #expect(staircase.polarity == reference.polarity)
+            #expect(staircase.hardestValue == reference.hardestValue)
+            #expect(staircase.easiestValue == reference.easiestValue)
+        }
+    }
+}
