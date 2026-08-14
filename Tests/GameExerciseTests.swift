@@ -1,7 +1,7 @@
 //
 //  GameExerciseTests.swift
 //
-//  D3 Stack Drop and G1 Balloon Pop.
+//  D3 Stack Drop, G1 Balloon Pop, G2 Sky Catch and G8 Space Dodge.
 //
 //  Both have a failure mode that looks like healthy play. If a balloon can never
 //  escape, the trial never ends in a miss, the staircase only ever gets
@@ -250,6 +250,155 @@ struct BalloonPopTests {
             #expect(game.polarity == BalanceMeterExercise.descriptor.staircase.polarity)
             #expect(game.hardestValue == BalanceMeterExercise.descriptor.staircase.hardestValue)
             #expect(game.easiestValue == BalanceMeterExercise.descriptor.staircase.easiestValue)
+        }
+    }
+}
+
+@Suite("Sky Catch and Space Dodge")
+struct CatchAndDodgeTests {
+
+    private static let smallestPointsPerDegree: Double = 29.8
+
+    // MARK: Touch and timing floors
+
+    @Test("the fruit clears Apple's touch minimum on the smallest screen")
+    func fruitIsBigEnough() {
+        let points = SkyCatchExercise.fruitDegrees * Self.smallestPointsPerDegree
+        #expect(points >= 44, "fruit is \(points) pt on an iPhone SE")
+    }
+
+    @Test("the under-five game gives a child time to react")
+    func skyCatchIsSlowEnough() {
+        for ratio in stride(from: 0.1, through: 2.0, by: 0.1) {
+            let seconds = SkyCatchExercise.secondsToFall(
+                for: GameDifficulty(contrastRatio: ratio))
+            #expect(seconds >= 2.0, "ratio \(ratio) gives \(seconds) s")
+        }
+    }
+
+    @Test("the older-children game is faster but still trackable")
+    func spaceDodgeIsFasterButBounded() {
+        let kid = SkyCatchExercise.fallSpeed(for: GameDifficulty(contrastRatio: 2.0))
+        let older = SpaceDodgeExercise.fallSpeed(for: GameDifficulty(contrastRatio: 2.0))
+        #expect(older > kid, "the 8+ game should not run at under-five speed")
+        #expect(older <= GameField.maximumSpeedDegreesPerSecond,
+                "and must still be inside the smooth-pursuit ceiling")
+        for ratio in stride(from: 0.1, through: 2.0, by: 0.1) {
+            let seconds = SpaceDodgeExercise.secondsToFall(
+                for: GameDifficulty(contrastRatio: ratio))
+            #expect(seconds >= 1.2, "ratio \(ratio) gives \(seconds) s to steer clear")
+        }
+    }
+
+    // MARK: The scoring is opposite, on purpose
+
+    @Test("catching scores a success and being struck scores a failure")
+    func scoringIsOppositeBetweenTheTwoGames() {
+        // Both exercises call a correct trial "1". What differs is which EVENT
+        // produces it: contact in Sky Catch, avoiding contact in Space Dodge.
+        // Wire them the same way round and Space Dodge would train a user to
+        // fly into the rocks, with the staircase faithfully finding the contrast
+        // at which they hit four in five.
+        let centre = GameField.widthDegrees / 2
+
+        let fruitRadius = SkyCatchExercise.fruitDegrees / 2
+        #expect(SkyCatchExercise.caught(
+            previous: CGPoint(x: centre, y: SkyCatchExercise.basketY - fruitRadius - 0.2),
+            current: CGPoint(x: centre, y: SkyCatchExercise.basketY - fruitRadius + 0.2),
+            basketCentreX: centre))
+
+        let rockRadius = SpaceDodgeExercise.rockDegrees / 2
+        #expect(SpaceDodgeExercise.struckShip(
+            previous: CGPoint(x: centre, y: SpaceDodgeExercise.shipY - rockRadius - 0.2),
+            current: CGPoint(x: centre, y: SpaceDodgeExercise.shipY - rockRadius + 0.2),
+            shipCentreX: centre))
+    }
+
+    @Test("a rock well away from the ship does not strike it")
+    func wideRockMisses() {
+        let shipCentre = 3.0
+        let radius = SpaceDodgeExercise.rockDegrees / 2
+        let x = shipCentre + SpaceDodgeExercise.shipWidthDegrees / 2
+            + SpaceDodgeExercise.rockDegrees + 0.5
+        #expect(!SpaceDodgeExercise.struckShip(
+            previous: CGPoint(x: x, y: SpaceDodgeExercise.shipY - radius - 0.2),
+            current: CGPoint(x: x, y: SpaceDodgeExercise.shipY - radius + 0.2),
+            shipCentreX: shipCentre))
+    }
+
+    @Test("a fruit that reaches the bottom is a miss")
+    func fruitCanBeMissed() {
+        let body = GamePhysics.Body(
+            position: CGPoint(x: 4, y: GameField.heightDegrees + 2),
+            velocity: .zero,
+            size: SkyCatchExercise.fruitDegrees)
+        #expect(SkyCatchExercise.fellPast(body))
+    }
+
+    @Test("a rock that reaches the bottom is a successful dodge")
+    func rockCanPassSafely() {
+        let body = GamePhysics.Body(
+            position: CGPoint(x: 4, y: GameField.heightDegrees + 2),
+            velocity: .zero,
+            size: SpaceDodgeExercise.rockDegrees)
+        #expect(SpaceDodgeExercise.passedSafely(body))
+    }
+
+    // MARK: Trials
+
+    @Test("both games drop things inside the field, moving down")
+    func dropsAreLegal() {
+        var generator = SeededGenerator(seed: 61)
+        let catcher = SkyCatchExercise()
+        let dodger = SpaceDodgeExercise()
+        for _ in 0..<200 {
+            let catchTrial = catcher.makeTrial(difficulty: 0.4, generator: &generator)
+            let fruit = catcher.drop(for: catchTrial)
+            #expect(fruit.position.x >= fruit.radius - 1e-9)
+            #expect(fruit.position.x <= GameField.widthDegrees - fruit.radius + 1e-9)
+            #expect(fruit.velocity.y > 0)
+
+            let dodgeTrial = dodger.makeTrial(difficulty: 0.4, generator: &generator)
+            let rock = dodger.rock(for: dodgeTrial)
+            #expect(rock.position.x >= rock.radius - 1e-9)
+            #expect(rock.position.x <= GameField.widthDegrees - rock.radius + 1e-9)
+            #expect(rock.velocity.y > 0)
+        }
+    }
+
+    @Test("drop positions vary across the width in both games")
+    func dropsVary() {
+        var generator = SeededGenerator(seed: 88)
+        let catcher = SkyCatchExercise()
+        var buckets: Set<Int> = []
+        for _ in 0..<300 {
+            let trial = catcher.makeTrial(difficulty: 0.4, generator: &generator)
+            buckets.insert(Int(catcher.drop(for: trial).position.x))
+        }
+        #expect(buckets.count >= 5,
+                "fruit always fell in the same place, so the basket can just sit there")
+    }
+
+    @Test("every game reports on the balance meter's scale")
+    func allGamesShareTheScale() {
+        let reference = BalanceMeterExercise.descriptor.staircase
+        for staircase in [SkyCatchExercise.descriptor.staircase,
+                          SpaceDodgeExercise.descriptor.staircase] {
+            #expect(staircase.polarity == reference.polarity)
+            #expect(staircase.hardestValue == reference.hardestValue)
+            #expect(staircase.easiestValue == reference.easiestValue)
+        }
+    }
+
+    @Test("the two games are on the games track, not the dichoptic one")
+    func gamesAreLabelledAsGames() {
+        // They ARE dichoptic exercises, but the Train screen groups them as
+        // games so a parent looking for something a child will tolerate can
+        // find them. The evidence tier stays honest at A.
+        for descriptor in [SkyCatchExercise.descriptor, SpaceDodgeExercise.descriptor,
+                           BalloonPopExercise.descriptor] {
+            #expect(descriptor.track == .game)
+            #expect(descriptor.evidenceTier == .a)
         }
     }
 }
