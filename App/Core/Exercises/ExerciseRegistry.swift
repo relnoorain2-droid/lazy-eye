@@ -44,7 +44,9 @@ enum ExerciseRegistry {
         HiddenHalfExercise.descriptor,
         SplitMatchExercise.descriptor,
         PeekabooExercise.descriptor,
-        ColourSortExercise.descriptor
+        ColourSortExercise.descriptor,
+        DepthStepsExercise.descriptor,
+        HoldTheFusionExercise.descriptor
     ]
 
     static func descriptor(for id: String) -> ExerciseDescriptor? {
@@ -109,6 +111,10 @@ enum ExerciseRegistry {
             return PeekabooExercise()
         case ColourSortExercise.descriptor.id:
             return ColourSortExercise()
+        case DepthStepsExercise.descriptor.id:
+            return DepthStepsExercise()
+        case HoldTheFusionExercise.descriptor.id:
+            return HoldTheFusionExercise()
         default:
             return nil
         }

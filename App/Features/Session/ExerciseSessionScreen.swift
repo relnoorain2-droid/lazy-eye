@@ -55,6 +55,8 @@ struct ExerciseSessionScreen: View {
         SplitMatchExercise.descriptor.id,
         PeekabooExercise.descriptor.id,
         ColourSortExercise.descriptor.id,
+        DepthStepsExercise.descriptor.id,
+        HoldTheFusionExercise.descriptor.id,
     ]
 
     var body: some View {
@@ -119,6 +121,10 @@ struct ExerciseSessionScreen: View {
             PeekabooView(runner: runner, calibration: calibration) { _ in onFinish() }
         case ColourSortExercise.descriptor.id:
             ColourSortView(runner: runner, calibration: calibration) { _ in onFinish() }
+        case DepthStepsExercise.descriptor.id:
+            DepthStepsView(runner: runner, calibration: calibration) { _ in onFinish() }
+        case HoldTheFusionExercise.descriptor.id:
+            HoldTheFusionView(runner: runner, calibration: calibration) { _ in onFinish() }
         default:
             GaborOrientationView(runner: runner, calibration: calibration) { _ in onFinish() }
         }

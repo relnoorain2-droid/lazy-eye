@@ -811,3 +811,156 @@ struct PeekabooAndSortTests {
         }
     }
 }
+
+@Suite("Depth Steps and Hold the Fusion")
+struct FusionExerciseTests {
+
+    // MARK: D7 — the catch trials are the whole safeguard
+
+    @Test("catch trials appear, and their honest answer is 'two'")
+    func catchTrialsExist() {
+        // Without these, a user answering "I see one" every time walks the
+        // staircase to the easiest end and is reported as having an excellent
+        // fusion range. Nothing in the data would distinguish them from someone
+        // who genuinely has one.
+        let exercise = DepthStepsExercise()
+        var generator = SeededGenerator(seed: 91)
+        var catches = 0
+        let total = 1_000
+        for _ in 0..<total {
+            let trial = exercise.makeTrial(difficulty: 20, generator: &generator)
+            if exercise.isCatchTrial(trial) {
+                catches += 1
+                #expect(trial.correctAnswer == DepthStepsExercise.Answer.two.rawValue,
+                        "a catch trial must score 'two' as correct")
+                #expect(trial.payload.value("disparityArcmin")
+                        == DepthStepsExercise.catchDisparityArcminutes)
+            } else {
+                #expect(trial.correctAnswer == DepthStepsExercise.Answer.one.rawValue)
+                #expect(trial.payload.value("disparityArcmin") == 20)
+            }
+        }
+        let share = Double(catches) / Double(total)
+        let expected = 1.0 / Double(DepthStepsExercise.catchTrialInterval)
+        #expect(abs(share - expected) < 0.06,
+                "\(Int(share * 100))% were catch trials, expected about \(Int(expected * 100))%")
+    }
+
+    @Test("always answering 'one' fails every catch trial")
+    func blindAnsweringIsCaught() {
+        // The property that makes the metric falsifiable, stated as a test.
+        let exercise = DepthStepsExercise()
+        var generator = SeededGenerator(seed: 93)
+        var caught = 0
+        for _ in 0..<500 {
+            let trial = exercise.makeTrial(difficulty: 30, generator: &generator)
+            let blindAnswer = DepthStepsExercise.Answer.one.rawValue
+            if trial.correctAnswer != blindAnswer { caught += 1 }
+        }
+        #expect(caught > 50,
+                "only \(caught) of 500 blind answers were caught — too few to move the staircase")
+    }
+
+    @Test("the catch disparity is far beyond any human fusion range")
+    func catchDisparityIsUnfusable() {
+        #expect(DepthStepsExercise.catchDisparityArcminutes
+                > DepthStepsExercise.descriptor.staircase.hardestValue * 2,
+                "a catch trial a user could fuse would punish honest answering")
+    }
+
+    @Test("both crossed and uncrossed disparities are presented")
+    func bothDepthDirectionsAppear() {
+        let exercise = DepthStepsExercise()
+        var generator = SeededGenerator(seed: 97)
+        var directions: Set<Int> = []
+        for _ in 0..<300 {
+            let trial = exercise.makeTrial(difficulty: 25, generator: &generator)
+            directions.insert(Int(trial.payload.value("crossed")))
+        }
+        #expect(directions.count == 2,
+                "base-in and base-out must both be tested")
+    }
+
+    @Test("D7 inherits the one-point disparity floor")
+    func depthStepsRespectsThePixelGrid() throws {
+        // Same failure as D6 would have had: below a point of shift there is no
+        // disparity on screen, only two identical images.
+        let limit = try #require(DepthStepsExercise.descriptor.staircase.renderLimit)
+        let profile = CalibrationProfile(screenPointsPerCM: 56.9,
+                                         screenSizeUserVerified: true,
+                                         viewingDistanceCM: 30)
+        let floor = try #require(limit.hardestRenderableValue(for: profile))
+        #expect(abs(floor - 60.0 / profile.points(forDegrees: 1.0)) < 0.05)
+    }
+
+    // MARK: D10 — the answer demonstrates the hold
+
+    @Test("the hold is demonstrated by naming a shape, not by a held button")
+    func holdIsDemonstratedNotAsserted() {
+        // A "hold this button while fused" design is unfalsifiable: holding it
+        // throughout produces a perfect score. Naming a shape that is only
+        // identifiable while fused makes the answer the evidence.
+        let exercise = HoldTheFusionExercise()
+        var generator = SeededGenerator(seed: 99)
+        for _ in 0..<200 {
+            let trial = exercise.makeTrial(difficulty: 6, generator: &generator)
+            #expect(StereogramParameters.Shape(rawValue: trial.correctAnswer) != nil,
+                    "the answer must be a nameable shape")
+        }
+        #expect(HoldTheFusionExercise.descriptor.staircase.alternatives == 4,
+                "four shapes means a guesser is right one time in four, which the staircase corrects for")
+    }
+
+    @Test("the hold period is what varies, not the disparity")
+    func onlyDurationVaries() {
+        // Letting the disparity vary too would make the threshold a mixture of
+        // fusion range and fusion stamina, describing neither.
+        let exercise = HoldTheFusionExercise()
+        let calibration = CalibrationProfile(screenPointsPerCM: 47.2,
+                                             screenSizeUserVerified: true,
+                                             viewingDistanceCM: 50)
+        var generator = SeededGenerator(seed: 103)
+        var disparities: Set<Double> = []
+        for seconds in [2.0, 6.0, 12.0, 20.0] {
+            let trial = exercise.makeTrial(difficulty: seconds, generator: &generator)
+            #expect(exercise.holdSeconds(for: trial) == seconds)
+            disparities.insert(exercise.parameters(for: trial, calibration: calibration)
+                .disparityArcminutes)
+        }
+        #expect(disparities.count == 1,
+                "the disparity moved between trials: \(disparities)")
+    }
+
+    @Test("all four shapes are used")
+    func shapesVary() {
+        let exercise = HoldTheFusionExercise()
+        var generator = SeededGenerator(seed: 107)
+        var shapes: Set<Int> = []
+        for _ in 0..<400 {
+            shapes.insert(exercise.makeTrial(difficulty: 5, generator: &generator)
+                .correctAnswer)
+        }
+        #expect(shapes.count == 4)
+    }
+
+    @Test("longer holds are the harder end of the staircase")
+    func longerIsHarder() {
+        #expect(HoldTheFusionExercise.descriptor.staircase.polarity == .higherIsHarder)
+        #expect(HoldTheFusionExercise.descriptor.staircase.hardestValue
+                > HoldTheFusionExercise.descriptor.staircase.easiestValue)
+    }
+
+    @Test("neither interpretation claims a clinical finding")
+    func interpretationsStayHonest() {
+        for value in [1.0, 5.0, 12.0, 25.0, 60.0, 150.0] {
+            for text in [DepthStepsExercise.interpretation(disparityArcminutes: value),
+                         HoldTheFusionExercise.interpretation(holdSeconds: value)] {
+                #expect(!text.isEmpty)
+                let lowered = text.lowercased()
+                for phrase in ["normal", "diagnos", "healthy", "abnormal"] {
+                    #expect(!lowered.contains(phrase), "\"\(phrase)\" in \"\(text)\"")
+                }
+            }
+        }
+    }
+}
