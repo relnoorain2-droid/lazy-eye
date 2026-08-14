@@ -35,7 +35,8 @@ enum ExerciseRegistry {
         PathTracerExercise.descriptor,
         ReadingLadderExercise.descriptor,
         BalanceMeterExercise.descriptor,
-        DepthPopExercise.descriptor
+        DepthPopExercise.descriptor,
+        BounceExercise.descriptor
     ]
 
     static func descriptor(for id: String) -> ExerciseDescriptor? {
@@ -82,6 +83,8 @@ enum ExerciseRegistry {
             return BalanceMeterExercise()
         case DepthPopExercise.descriptor.id:
             return DepthPopExercise()
+        case BounceExercise.descriptor.id:
+            return BounceExercise()
         default:
             return nil
         }
