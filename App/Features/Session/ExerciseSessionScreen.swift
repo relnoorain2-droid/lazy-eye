@@ -45,6 +45,7 @@ struct ExerciseSessionScreen: View {
         PathTracerExercise.descriptor.id,
         ReadingLadderExercise.descriptor.id,
         BalanceMeterExercise.descriptor.id,
+        DepthPopExercise.descriptor.id,
     ]
 
     var body: some View {
@@ -89,6 +90,8 @@ struct ExerciseSessionScreen: View {
             ReadingLadderView(runner: runner, calibration: calibration) { _ in onFinish() }
         case BalanceMeterExercise.descriptor.id:
             BalanceMeterView(runner: runner, calibration: calibration) { _ in onFinish() }
+        case DepthPopExercise.descriptor.id:
+            DepthPopView(runner: runner, calibration: calibration) { _ in onFinish() }
         default:
             GaborOrientationView(runner: runner, calibration: calibration) { _ in onFinish() }
         }

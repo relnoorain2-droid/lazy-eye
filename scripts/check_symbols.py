@@ -227,6 +227,15 @@ def main() -> int:
                         f"'{receiver}.{member}', and '{receiver}' is @MainActor — "
                         f"mark the suite @MainActor")
 
+    # There was a check 5 here — initialiser labels against the constructed
+    # type's members — and it is deliberately gone. A nested initialiser's
+    # labels sit inside its parent's parentheses, so `ExerciseDescriptor(
+    # staircase: StaircaseConfiguration(dimensionName: ...))` reads as if
+    # `dimensionName` were passed to the descriptor. It produced 131 findings,
+    # every one false. Catching the real mistake needs to know where each
+    # nested call begins and ends, which is parsing Swift rather than scanning
+    # it. Left undone rather than left noisy: the whole value of this script is
+    # that a finding means something.
     if problems:
         print(f"check-symbols: FAIL — {len(problems)} finding(s)\n")
         for problem in problems:
