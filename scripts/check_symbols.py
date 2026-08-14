@@ -15,6 +15,11 @@ macOS CI round (~4 minutes of billed time plus the wait):
      `SubscriptionManager`) and run 35 (`resolvedHardestValue` is on
      `StaircaseConfiguration`, not `ExerciseDescriptor`).
 
+  4. ACTOR ISOLATION IN TESTS — a nonisolated test suite touching a static
+     member of a `@MainActor` type. Cost me CI run 36. The trap is that this
+     applies even to immutable `let` constants of `Sendable` type: isolation
+     comes from the enclosing type, not from the member's mutability.
+
 WHAT THIS IS NOT
 A type checker. It cannot infer the type of an arbitrary expression, so check 3
 only fires for receivers that are spelled as type names (static access). An
@@ -35,6 +40,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIRS = ["App", "Tests", "UITests"]
 
+MAIN_ACTOR_RE = re.compile(r'^\s*@MainActor\b')
 TYPE_RE = re.compile(
     r'^\s*(?:@\w+\s+)*(?:public |internal |private |fileprivate |final )*'
     r'(struct|enum|class|extension|protocol)\s+([\w.]+)')
@@ -71,6 +77,7 @@ def index_sources():
     members = defaultdict(list)      # (type, member) -> [locations]
     owners = defaultdict(set)        # member -> {types}
     types = defaultdict(list)        # type name -> [locations]
+    main_actor = set()               # types isolated to the main actor
 
     for directory in SOURCE_DIRS:
         base = ROOT / directory
@@ -79,9 +86,15 @@ def index_sources():
         for path in sorted(base.rglob("*.swift")):
             depth = 0
             stack = []
+            saw_main_actor = False
             rel = path.relative_to(ROOT)
             for number, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+                if MAIN_ACTOR_RE.match(line):
+                    saw_main_actor = True
+                    continue
                 match = TYPE_RE.match(line)
+                if not match and line.strip() and not line.lstrip().startswith(("@", "//")):
+                    saw_main_actor = False
                 if match:
                     name = match.group(2)
                     # Qualified by nesting, so `GaborOrientationExercise.Answer`
@@ -90,6 +103,10 @@ def index_sources():
                     stack.append((depth, qualified, match.group(1)))
                     if match.group(1) != "extension":
                         types[qualified].append(f"{rel}:{number}")
+                    # `@MainActor` on the line above, or on the type itself.
+                    if saw_main_actor or "@MainActor" in line:
+                        main_actor.add(qualified)
+                    saw_main_actor = False
 
                 # Members sit exactly one brace inside their type. Anything
                 # deeper is a local, and locals are not members.
@@ -118,11 +135,11 @@ def index_sources():
                 while stack and depth <= stack[-1][0]:
                     stack.pop()
 
-    return members, owners, types
+    return members, owners, types, main_actor
 
 
 def main() -> int:
-    members, owners, types = index_sources()
+    members, owners, types, main_actor = index_sources()
     problems = []
 
     # 1. Duplicate declarations. Overloads legitimately share a name, so only
@@ -170,6 +187,45 @@ def main() -> int:
                 problems.append(
                     f"{rel}: '{receiver}.{member}' — '{member}' is declared on "
                     f"{sorted(owners[member])}, not on '{receiver}'")
+
+    # 4. Nonisolated test suites reaching into @MainActor types.
+    main_actor_short = {name.split(".")[-1] for name in main_actor}
+    tests = ROOT / "Tests"
+    if tests.exists():
+        for path in sorted(tests.rglob("*.swift")):
+            lines = path.read_text(encoding="utf-8").split("\n")
+            rel = path.relative_to(ROOT)
+            suite = None
+            isolated = False
+            pending_main_actor = False
+            for number, line in enumerate(lines, 1):
+                if MAIN_ACTOR_RE.match(line):
+                    pending_main_actor = True
+                    continue
+                declaration = TYPE_RE.match(line)
+                if declaration and declaration.group(1) in ("struct", "class"):
+                    suite = declaration.group(2)
+                    isolated = pending_main_actor or "@MainActor" in line
+                    pending_main_actor = False
+                elif line.strip() and not line.lstrip().startswith(("@", "//")):
+                    # Any other real code ends the attribute run.
+                    pending_main_actor = False
+
+                if suite is None or isolated:
+                    continue
+                stripped = re.sub(r'//.*', '', line)
+                for receiver, member in re.findall(r'\b([A-Z]\w+)\.(\w+)\b', stripped):
+                    if receiver not in main_actor_short:
+                        continue
+                    # Enum cases and nested types are not isolated; only stored
+                    # and computed statics are.
+                    if member not in owners or receiver not in {
+                            o.split(".")[-1] for o in owners[member]}:
+                        continue
+                    problems.append(
+                        f"{rel}:{number}: suite '{suite}' is nonisolated but touches "
+                        f"'{receiver}.{member}', and '{receiver}' is @MainActor — "
+                        f"mark the suite @MainActor")
 
     if problems:
         print(f"check-symbols: FAIL — {len(problems)} finding(s)\n")

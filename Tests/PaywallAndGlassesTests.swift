@@ -97,6 +97,9 @@ struct PaywallTests {
     }
 }
 
+// `AnaglyphSelfCheckView` is `@MainActor`, so its static members are too — even
+// the immutable `let` ones. A nonisolated suite cannot touch them.
+@MainActor
 @Suite("Glasses self-check")
 struct AnaglyphSelfCheckTests {
 
