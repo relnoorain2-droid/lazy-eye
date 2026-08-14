@@ -964,3 +964,159 @@ struct FusionExerciseTests {
         }
     }
 }
+
+@Suite("Bead Line, Maze Runner and Rhythm Tap")
+struct RemainingDichopticTests {
+
+    private static let smallestPointsPerDegree: Double = 29.8
+
+    // MARK: D8 Bead Line
+
+    @Test("catch trials draw a single line, where 'one' is the honest answer")
+    func beadLineCatchTrials() {
+        let exercise = BeadLineExercise()
+        let calibration = CalibrationProfile(screenPointsPerCM: 56.9,
+                                             screenSizeUserVerified: true,
+                                             viewingDistanceCM: 30)
+        var generator = SeededGenerator(seed: 111)
+        var catches = 0
+        for _ in 0..<1_000 {
+            let trial = exercise.makeTrial(difficulty: 25, generator: &generator)
+            if exercise.isCatchTrial(trial) {
+                catches += 1
+                #expect(trial.correctAnswer == BeadLineExercise.Answer.one.rawValue)
+                #expect(exercise.separationPoints(for: trial, calibration: calibration) == 0,
+                        "a catch trial must draw the lines on top of each other")
+            } else {
+                #expect(trial.correctAnswer == BeadLineExercise.Answer.two.rawValue)
+                #expect(exercise.separationPoints(for: trial, calibration: calibration) > 0,
+                        "a normal trial with no separation is a catch trial in disguise")
+            }
+        }
+        let share = Double(catches) / 1_000
+        #expect(abs(share - 0.25) < 0.06, "\(Int(share * 100))% were catch trials")
+    }
+
+    @Test("always answering 'two' fails the catch trials")
+    func beadLineBlindAnsweringIsCaught() {
+        let exercise = BeadLineExercise()
+        var generator = SeededGenerator(seed: 113)
+        var caught = 0
+        for _ in 0..<500 {
+            let trial = exercise.makeTrial(difficulty: 30, generator: &generator)
+            if trial.correctAnswer != BeadLineExercise.Answer.two.rawValue { caught += 1 }
+        }
+        #expect(caught > 50, "only \(caught) of 500 blind answers were caught")
+    }
+
+    // MARK: G4 Maze Runner
+
+    @Test("the gap is wide enough to steer into but not the whole field")
+    func gapIsSensible() {
+        #expect(MazeRunnerExercise.gapDegrees > MazeRunnerExercise.runnerDegrees,
+                "a gap narrower than the runner is impossible")
+        #expect(MazeRunnerExercise.gapDegrees < GameField.widthDegrees / 2,
+                "a gap half the field wide would be unmissable")
+        let points = MazeRunnerExercise.gapDegrees * Self.smallestPointsPerDegree
+        #expect(points >= 44, "the gap is \(points) pt on an iPhone SE")
+    }
+
+    @Test("passing through is judged against the gap, not the wall")
+    func passThroughGeometry() {
+        let gap = 4.0
+        // Dead centre passes.
+        #expect(MazeRunnerExercise.passedThrough(runnerX: gap, gapCentre: gap))
+        // Just inside the edge passes.
+        let inside = gap + (MazeRunnerExercise.gapDegrees
+                            - MazeRunnerExercise.runnerDegrees) / 2 - 0.01
+        #expect(MazeRunnerExercise.passedThrough(runnerX: inside, gapCentre: gap))
+        // Just outside does not.
+        let outside = gap + (MazeRunnerExercise.gapDegrees
+                             - MazeRunnerExercise.runnerDegrees) / 2 + 0.01
+        #expect(!MazeRunnerExercise.passedThrough(runnerX: outside, gapCentre: gap))
+    }
+
+    @Test("gaps appear across the width, and always fit inside the field")
+    func gapsVaryAndFit() {
+        let exercise = MazeRunnerExercise()
+        var generator = SeededGenerator(seed: 117)
+        var buckets: Set<Int> = []
+        let half = MazeRunnerExercise.gapDegrees / 2
+        for _ in 0..<300 {
+            let trial = exercise.makeTrial(difficulty: 0.6, generator: &generator)
+            let centre = exercise.gapCentre(for: trial)
+            #expect(centre - half >= -1e-9)
+            #expect(centre + half <= GameField.widthDegrees + 1e-9)
+            buckets.insert(Int(centre))
+        }
+        #expect(buckets.count >= 4, "the gap always appeared in the same place")
+    }
+
+    @Test("a wall gives time to steer at every difficulty")
+    func wallsApproachSlowlyEnough() {
+        for ratio in stride(from: 0.1, through: 2.0, by: 0.1) {
+            let seconds = MazeRunnerExercise.secondsToReach(
+                for: GameDifficulty(contrastRatio: ratio))
+            #expect(seconds >= 1.4, "ratio \(ratio) gives \(seconds) s to find the gap")
+        }
+    }
+
+    // MARK: G7 Rhythm Tap
+
+    @Test("a tap within tolerance counts and one outside does not")
+    func rhythmTapTolerance() {
+        let arrival = 2.0
+        #expect(RhythmTapExercise.inTime(tapAt: arrival, arrivalAt: arrival))
+        #expect(RhythmTapExercise.inTime(
+            tapAt: arrival + RhythmTapExercise.toleranceSeconds - 0.01,
+            arrivalAt: arrival))
+        #expect(!RhythmTapExercise.inTime(
+            tapAt: arrival + RhythmTapExercise.toleranceSeconds + 0.01,
+            arrivalAt: arrival))
+        // Early taps are judged the same way as late ones.
+        #expect(!RhythmTapExercise.inTime(
+            tapAt: arrival - RhythmTapExercise.toleranceSeconds - 0.01,
+            arrivalAt: arrival))
+    }
+
+    @Test("arrival time varies between trials")
+    func arrivalTimeVaries() {
+        // A fixed arrival lets a user tap to a learned rhythm without looking,
+        // which is the timing equivalent of answering blind.
+        let exercise = RhythmTapExercise()
+        var generator = SeededGenerator(seed: 119)
+        var delays: Set<Int> = []
+        for _ in 0..<300 {
+            let trial = exercise.makeTrial(difficulty: 0.5, generator: &generator)
+            delays.insert(Int(exercise.startDelay(for: trial) * 10))
+        }
+        #expect(delays.count >= 5, "the marker always arrived at the same moment")
+    }
+
+    @Test("the marker takes long enough to reach the line to be tracked")
+    func sweepIsTrackable() {
+        for ratio in stride(from: 0.1, through: 2.0, by: 0.1) {
+            let seconds = RhythmTapExercise.secondsToLine(
+                for: GameDifficulty(contrastRatio: ratio))
+            #expect(seconds >= 1.4, "ratio \(ratio) sweeps in \(seconds) s")
+        }
+    }
+
+    @Test("the timing tolerance is generous enough to be about seeing")
+    func toleranceIsAboutSeeing() {
+        // This measures whether the marker was SEEN, not musical timing. A 100 ms
+        // window would make it a reaction-time test that a suppressing user could
+        // still fail for motor reasons.
+        #expect(RhythmTapExercise.toleranceSeconds >= 0.25)
+    }
+
+    @Test("all three report on their own honest scales")
+    func staircasesAreCoherent() {
+        #expect(BeadLineExercise.descriptor.staircase.polarity == .higherIsHarder)
+        for descriptor in [MazeRunnerExercise.descriptor, RhythmTapExercise.descriptor] {
+            let reference = BalanceMeterExercise.descriptor.staircase
+            #expect(descriptor.staircase.hardestValue == reference.hardestValue)
+            #expect(descriptor.staircase.easiestValue == reference.easiestValue)
+        }
+    }
+}
