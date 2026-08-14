@@ -48,6 +48,13 @@ jobs:
       - name: App icon meets Apple's upload rules
         run: python3 scripts/check_app_icon.py
 
+      # Duplicate declarations, type-name clashes and members called on the
+      # wrong type. Three CI rounds have now been spent on exactly these, each
+      # costing four minutes of macOS time at the 10x rate to learn something a
+      # second of Python on a free runner can tell us. See scripts/check_symbols.py.
+      - name: No duplicate or misplaced symbols
+        run: python3 scripts/check_symbols.py
+
       - name: Legal documents are present
         run: |
           for doc in medical-disclaimer privacy-policy subscription-terms evidence-and-methods; do

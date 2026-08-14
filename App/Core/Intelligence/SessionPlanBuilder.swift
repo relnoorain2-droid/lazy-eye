@@ -66,7 +66,7 @@ struct SessionPlanBuilder: Sendable {
 
     /// - Parameter hardestValues: the hardest value each exercise can actually
     ///   be rendered at ON THIS DISPLAY, keyed by exercise id. The caller
-    ///   computes these with `descriptor.resolvedHardestValue(for:)` because that
+    ///   computes these with `descriptor.staircase.resolvedHardestValue(for:)`, which
     ///   needs the live `CalibrationProfile`, which is a SwiftData model and so
     ///   deliberately kept out of this `Sendable` type. Anything missing falls
     ///   back to the descriptor's own bound.

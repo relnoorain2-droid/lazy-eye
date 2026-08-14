@@ -354,8 +354,12 @@ struct TodayView: View {
                     trialDays: trials.map(\.timestamp),
                     difficulties: trials.map(\.difficultyValue),
                     fatigueEndings: fatigue)
-                hardest[descriptor.id] =
-                    descriptor.resolvedHardestValue(for: profile.calibration)
+                // On the STAIRCASE, not the descriptor — the descriptor holds a
+                // `StaircaseConfiguration` and that is where the display clamp
+                // lives. Same class of mistake as `isPro`, which is on
+                // `EntitlementStatus` rather than `SubscriptionManager`.
+                hardest[descriptor.id] = descriptor.staircase
+                    .resolvedHardestValue(for: profile.calibration)
             }
 
             let builder = SessionPlanBuilder()

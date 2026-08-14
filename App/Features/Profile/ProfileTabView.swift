@@ -464,16 +464,21 @@ struct ProfileTabView: View {
 
     // MARK: Section shell
 
-    @ViewBuilder
     private func section<Content: View>(_ title: String,
                                         @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        // `content` is non-escaping, and `AmblyoCard` STORES its closure — so
+        // calling `content()` inside that closure would let a non-escaping
+        // parameter escape. Building the subtree first and capturing the
+        // resulting VALUE sidesteps it without marking anything @escaping,
+        // which would force every caller's closure to be heap-allocated.
+        let inner = content()
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
             Text(title)
                 .font(TypeScale.caption(rounded: theme.usesRoundedFont).weight(.semibold))
                 .foregroundStyle(Color.textSecondary)
                 .textCase(.uppercase)
             AmblyoCard {
-                VStack(alignment: .leading, spacing: Spacing.sm) { content() }
+                VStack(alignment: .leading, spacing: Spacing.sm) { inner }
             }
         }
     }
