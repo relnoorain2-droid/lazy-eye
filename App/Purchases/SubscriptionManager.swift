@@ -52,8 +52,17 @@ final class SubscriptionManager {
     /// `Transaction.updates` — if nothing is listening it is missed.
     func start() async {
         updatesTask = listenForTransactions()
-        await loadProducts()
+        // ENTITLEMENTS FIRST, PRODUCTS SECOND.
+        //
+        // These were the other way round, and `loadProducts` is a network call
+        // that can take many seconds — or, on a cold TestFlight install behind a
+        // sandbox sign-in prompt, effectively forever. Until it returned,
+        // `status` stayed `.unknown` and Profile showed "Checking…" with no way
+        // out. Whether the user is entitled is answered from the LOCAL receipt
+        // and needs no network at all, so it has no business queueing behind a
+        // product lookup.
         await refreshEntitlements()
+        await loadProducts()
     }
 
     // NO deinit HERE, deliberately.
@@ -89,6 +98,12 @@ final class SubscriptionManager {
             status = .pro(expires: nil)
             return
         }
+
+        // `.unknown` is a STARTING state, never a resting one. If the loop below
+        // throws, hangs or is cancelled, the status must still land somewhere
+        // the UI can describe. Defaulting to `.free` is the safe direction: it
+        // shows the paywall rather than granting access we could not verify.
+        defer { if status == .unknown { status = .free } }
 
         var newStatus: EntitlementStatus = .free
         for await result in Transaction.currentEntitlements {

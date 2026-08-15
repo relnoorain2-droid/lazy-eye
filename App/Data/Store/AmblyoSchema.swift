@@ -95,4 +95,27 @@ extension ModelContainer {
             configurations: configuration
         )
     }
+
+    /// Deletes the on-disk store so a fresh one can be created.
+    ///
+    /// LAST RESORT, AND IT DESTROYS USER DATA.
+    /// Only called when the store will not open at all — a failed migration or
+    /// a corrupt file — where the alternative is an app that launches into an
+    /// empty in-memory store and quietly loses everything the user does from
+    /// then on. Rebuilding is not better than migrating; it is better than
+    /// pretending. Whoever calls this must tell the user.
+    ///
+    /// SwiftData keeps three files, and removing only the .store leaves the
+    /// write-ahead log and shared-memory files behind, which can resurrect the
+    /// same failure. All three go.
+    static func destroyAmblyoStore() throws {
+        let directory = URL.applicationSupportDirectory
+        let base = directory.appending(path: "Amblyo.store")
+        let files = [base,
+                     directory.appending(path: "Amblyo.store-wal"),
+                     directory.appending(path: "Amblyo.store-shm")]
+        for file in files where FileManager.default.fileExists(atPath: file.path()) {
+            try FileManager.default.removeItem(at: file)
+        }
+    }
 }

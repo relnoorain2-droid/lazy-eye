@@ -106,3 +106,48 @@ already right, which is why it read as correct.
 
 The regression test fails by hanging if the condition ever reverts, so its trial
 budget is a hard bound a correct runner cannot reach rather than a generous one.
+
+## Build 2 on device — the app could not be used, and the tests said it was fine
+
+Four screens broken, one root cause and two independents. Worth recording in
+full because the failure mode is the interesting part, not the fix.
+
+**The app launched into a state with no way out.** Whether to show setup or the
+app was decided by `hasCompletedOnboarding`, a UserDefaults boolean, and by
+nothing else. UserDefaults survives things the database does not — an update
+whose store will not migrate, a failed save, a rebuilt store. Build 1 set the
+flag; build 2's store would not open; the flag was still there. So the app went
+to the tab bar with no profile in it, every screen read "No profile yet. Finish
+setup to start training", and there was no route to setup because the flag said
+setup was finished. Deleting the app was the only exit and nothing said so.
+
+Routing now asks the DATA — are there active profiles — and treats the flag as a
+tiebreaker, and reconciles a stale flag on appearance so it heals rather than
+re-deciding every launch.
+
+**The container fallback caused the empty store rather than surviving it.** On a
+failure it swapped in an in-memory container "so the user gets a working app
+rather than a dead launch". An in-memory store is empty and is wiped every
+launch, so it produced a permanently blank app that silently discarded
+everything done in it. A store that will not open is now REBUILT ON DISK and the
+user is told, because the honest description is "your data is gone" and they may
+want to know before starting over.
+
+**Progress used a spinner as its empty state.** With no profile nothing was
+loading and nothing would ever arrive, so it span forever and looked like a hang
+— which, from the user's side, it was.
+
+**"Checking…" never resolved.** `start()` awaited `loadProducts()` — a network
+call — before `refreshEntitlements()`, which needs no network at all because it
+reads the local receipt. Until products returned, status stayed `.unknown`.
+Reversed, plus `.unknown` now always resolves to `.free` on the way out:
+a starting state, never a resting one, and defaulting to free shows the paywall
+rather than granting access that was never verified.
+
+### Why 460 tests passed
+
+Not one of them touched the routing decision. It was three words inside a
+SwiftUI `body`, and a `body` cannot be asked a question. It is a function now
+with five cases in `RootRoutingTests`, including the exact stale-flag state that
+shipped. The general lesson: every test in this project examines values, and the
+one thing that had never been examined was whether the app comes up.

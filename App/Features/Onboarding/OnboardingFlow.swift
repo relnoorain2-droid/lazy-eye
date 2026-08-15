@@ -24,6 +24,11 @@ import SwiftData
 @MainActor
 struct OnboardingFlow: View {
 
+    /// True when the previous store could not be opened and was rebuilt. Setup
+    /// then explains why the user is here again rather than letting them think
+    /// the app simply forgot them.
+    var storeWasReset = false
+
     @State private var step: OnboardingStep = .welcome
     @State private var draft = OnboardingDraft()
     @State private var commitError: String?
@@ -39,6 +44,14 @@ struct OnboardingFlow: View {
         NavigationStack {
             VStack(spacing: 0) {
                 header
+                if storeWasReset, step == .welcome {
+                    SafetyBanner(
+                        level: .caution,
+                        title: "Your saved data couldn't be opened",
+                        message: "The app had to start a fresh store, so previous profiles and history are gone. Nothing was sent anywhere — it was only ever on this device. Setting up again takes a couple of minutes.")
+                        .padding(.horizontal)
+                        .padding(.bottom, Spacing.sm)
+                }
                 content
                 footer
             }

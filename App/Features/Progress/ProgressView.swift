@@ -39,6 +39,17 @@ struct ProgressDashboardView: View {
                                  message: loadError)
                 } else if let analysis, let profile {
                     content(analysis, profile: profile)
+                } else if profile == nil {
+                    // A SPINNER HERE WAS A LIE. With no profile there is nothing
+                    // being loaded and nothing that will ever arrive, so the old
+                    // code span forever and looked like a hang — which is what
+                    // it was, from the user's side. An empty state has to say
+                    // which empty it is.
+                    ContentUnavailableView(
+                        "Nothing to chart yet",
+                        systemImage: "chart.line.uptrend.xyaxis",
+                        description: Text("Finish setup and complete a session, and your history appears here."))
+                        .padding(.top, Spacing.xl)
                 } else {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, Spacing.xxl)
                 }
