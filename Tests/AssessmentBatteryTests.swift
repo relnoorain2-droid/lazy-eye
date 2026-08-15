@@ -279,6 +279,53 @@ struct AssessmentRunnerTests {
         #expect(!AssessmentBattery.summary(for: result).isEmpty)
     }
 
+    @Test("the battery ends even when the fellow-eye block earns no number")
+    func unreportableFellowEyeBlockStillTerminates() {
+        // The exact hang: answering everything correctly produces ZERO
+        // reversals, so `reportableThreshold` returns nil — correctly. The
+        // runner then asked "is there a fellow-eye number yet?" to decide
+        // whether to run the fellow-eye block, got nil, and ran it again.
+        // Forever. A user would sit in an acuity test with no end.
+        //
+        // This test fails by HANGING if the condition goes back to reading the
+        // result, which is why the trial budget below is a hard bound rather
+        // than a generous one: it must be impossible for a correct runner to
+        // reach it.
+        let runner = AssessmentRunner(profile: profile(), calibration: calibration,
+                                      isPro: true, seed: 7)
+        runner.start()
+
+        // Four sub-tests, five blocks (acuity runs twice), plus a rest screen
+        // between each. Double that is comfortable headroom for a correct
+        // runner and nowhere near an infinite one.
+        let bound = AssessmentBattery.trialsPerSubtest * 12
+        var steps = 0
+        while steps < bound {
+            steps += 1
+            switch runner.phase {
+            case .running:
+                guard let trial = runner.currentTrial else {
+                    Issue.record("running with no trial")
+                    return
+                }
+                runner.respond(answer: trial.correctAnswer)
+            case .betweenTests:
+                runner.continueToNextTest()
+            case .finished, .abandoned, .ready:
+                steps = bound
+            }
+        }
+
+        guard case .finished(let result) = runner.phase else {
+            Issue.record("the acuity block restarted instead of finishing")
+            return
+        }
+        // And the number it could not earn is still absent, rather than the
+        // runner having invented one to escape the loop.
+        #expect(result.acuityFellow == nil,
+                "a run with no reversals must not report a fellow-eye acuity")
+    }
+
     @Test("abandoning records nothing at all")
     func abandonDiscardsEverything() {
         // A half-finished battery is not a shorter battery, it is an unmeasured

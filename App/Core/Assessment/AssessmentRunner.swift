@@ -67,6 +67,11 @@ final class AssessmentRunner {
     /// Acuity runs twice. This tracks which eye the current acuity block is for.
     private var measuringFellowEye = false
 
+    /// Whether the fellow-eye acuity block has RUN — which is not the same as
+    /// whether it produced a number, and conflating the two hung the battery.
+    /// See `finishSubtest`.
+    private var fellowEyeBlockFinished = false
+
     init(profile: Profile, calibration: CalibrationProfile, isPro: Bool,
          seed: UInt64 = UInt64.random(in: 0..<UInt64.max)) {
         self.profile = profile
@@ -202,6 +207,7 @@ final class AssessmentRunner {
             if measuringFellowEye {
                 acuityFellowEye = accepted
                 measuringFellowEye = false
+                fellowEyeBlockFinished = true
             } else if let accepted {
                 results[.acuity] = accepted
             }
@@ -219,7 +225,19 @@ final class AssessmentRunner {
         }
 
         // Acuity runs a second block for the fellow eye before moving on.
-        if test == .acuity, !measuringFellowEye, acuityFellowEye == nil {
+        //
+        // THE CONDITION IS "HAS IT RUN", NOT "DID IT PRODUCE A NUMBER".
+        // This read `acuityFellowEye == nil`, which hung the battery: a fellow
+        // block whose threshold was not reportable — no reversals yet, or a run
+        // too short to trust — leaves `acuityFellowEye` nil, so the same block
+        // restarted, produced nothing again, and restarted forever. The user
+        // would sit in an acuity sub-test that never ended.
+        //
+        // It is the same distinction the whole battery is built on: not
+        // measuring something and measuring nothing are different facts. Every
+        // OTHER place in this file gets that right, and the one place that
+        // decided control flow from it got it wrong.
+        if test == .acuity, !measuringFellowEye, !fellowEyeBlockFinished {
             measuringFellowEye = true
             begin(index: index)
             return

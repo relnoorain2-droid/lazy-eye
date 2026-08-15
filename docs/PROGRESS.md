@@ -84,3 +84,25 @@ caution.
 All three were found by registry-wide tests that iterate every exercise rather than
 a fixed list, which is the only reason they surfaced at all: nothing generated a
 trial at the resolved bound until those tests did.
+
+## CI 52 — 7 failures down to 1, and the last one was a hang
+
+460 tests, 1 failure: `AssessmentRunner` could restart the acuity sub-test
+forever.
+
+The second acuity block (fellow eye) was scheduled by asking *"is there a
+fellow-eye number yet?"* A block whose threshold is not reportable — too few
+reversals, or a run too short to trust — leaves that value nil, so the same block
+started again, produced nothing again, and started again. A user would sit in an
+acuity test with no end, and the only reason it surfaced is that answering every
+trial correctly produces ZERO reversals, which is exactly what the full-run test
+does.
+
+The condition is now "has the fellow block run", tracked separately from what it
+produced. This is the same distinction the battery is built on — not measuring
+something and measuring nothing are different facts — and the one place that
+decided *control flow* from it had them confused. Every other use in the file was
+already right, which is why it read as correct.
+
+The regression test fails by hanging if the condition ever reverts, so its trial
+budget is a hard bound a correct runner cannot reach rather than a generous one.
