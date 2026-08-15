@@ -178,4 +178,52 @@ If you want to bring Amblyo up at an appointment, these are useful questions:
 - Is there anything about my eyes that means I should not be doing this?
 
 You can export your practice history from Progress and show it to them.
+
+---
+
+## Where to read these
+
+Every source below opens a PubMed search for that paper's exact title.
+
+We link to a title search rather than a direct identifier on purpose: a
+mistyped identifier resolves to a *different* paper while still looking like
+a citation, and for a health-adjacent app that is a worse failure than a
+slightly longer route to the right one.
+
+- Holmes JM et al. (2016). Effect of a binocular iPad game vs part-time patching in children aged 5 to 12 years with amblyopia: a randomized clinical trial. JAMA Ophthalmology.
+  [Find on PubMed](https://pubmed.ncbi.nlm.nih.gov/?term=Effect%20of%20a%20Binocular%20iPad%20Game%20vs%20Part-Time%20Patching%20in%20Children%20Aged%205%20to%2012%20Years%20With%20Amblyopia)
+
+- Kelly KR et al. (2016). Binocular iPad game vs patching for treatment of amblyopia in children: a randomized clinical trial. JAMA Ophthalmology.
+  [Find on PubMed](https://pubmed.ncbi.nlm.nih.gov/?term=Binocular%20iPad%20Game%20vs%20Patching%20for%20Treatment%20of%20Amblyopia%20in%20Children)
+
+- Xiao S et al. (2022). Randomized controlled trial of a dichoptic digital therapeutic for amblyopia. Ophthalmology.
+  [Find on PubMed](https://pubmed.ncbi.nlm.nih.gov/?term=Randomized%20Controlled%20Trial%20of%20a%20Dichoptic%20Digital%20Therapeutic%20for%20Amblyopia)
+
+- Hess RF, Thompson B (2015). Amblyopia and the binocular approach to its therapy. Vision Research.
+  [Find on PubMed](https://pubmed.ncbi.nlm.nih.gov/?term=Amblyopia%20and%20the%20binocular%20approach%20to%20its%20therapy)
+
+- Li J et al. (2013). Dichoptic training enables the adult amblyopic brain to learn. Current Biology.
+  [Find on PubMed](https://pubmed.ncbi.nlm.nih.gov/?term=Dichoptic%20training%20enables%20the%20adult%20amblyopic%20brain%20to%20learn)
+
+- Polat U et al. (2004). Improving vision in adult amblyopia by perceptual learning. PNAS.
+  [Find on PubMed](https://pubmed.ncbi.nlm.nih.gov/?term=Improving%20vision%20in%20adult%20amblyopia%20by%20perceptual%20learning)
+
+- Levi DM, Li RW (2009). Perceptual learning as a potential treatment for amblyopia: a mini-review. Vision Research.
+  [Find on PubMed](https://pubmed.ncbi.nlm.nih.gov/?term=Perceptual%20learning%20as%20a%20potential%20treatment%20for%20amblyopia%3A%20a%20mini-review)
+
+- Tsirlin I et al. (2015). Behavioural training as new treatment for adult amblyopia: a meta-analysis. IOVS.
+  [Find on PubMed](https://pubmed.ncbi.nlm.nih.gov/?term=Behavioural%20training%20as%20new%20treatment%20for%20adult%20amblyopia%3A%20a%20meta-analysis)
+
+- Pediatric Eye Disease Investigator Group (2003). A randomized trial of patching regimens for treatment of moderate amblyopia in children. Archives of Ophthalmology.
+  [Find on PubMed](https://pubmed.ncbi.nlm.nih.gov/?term=A%20randomized%20trial%20of%20patching%20regimens%20for%20treatment%20of%20moderate%20amblyopia%20in%20children)
+
+- Levitt H (1971). Transformed up-down methods in psychoacoustics. JASA.
+  [Find on PubMed](https://pubmed.ncbi.nlm.nih.gov/?term=Transformed%20up-down%20methods%20in%20psychoacoustics)
+
+**Two of these deserve to be read rather than counted.** Holmes et al. (2016)
+found that a binocular iPad game did **not** outperform patching, and Kelly et
+al. (2016) found an advantage at two weeks that is not the same as a long-term
+one. Both are listed here because a reference list that only contains
+supportive findings is advertising rather than evidence.
+
 <!-- claims-lint:enable -->
