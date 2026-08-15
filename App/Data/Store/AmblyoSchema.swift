@@ -82,13 +82,35 @@ extension ModelContainer {
     /// "Data Not Collected" (docs/08-COMPLIANCE-LEGAL.md section 6). Adding
     /// CloudKit in v1.1 changes that answer — do it deliberately.
     static func amblyo(inMemory: Bool = false) throws -> ModelContainer {
-        let configuration = ModelConfiguration(
-            "Amblyo",
-            schema: AmblyoSchema.current,
-            isStoredInMemoryOnly: inMemory,
-            allowsSave: true,
-            cloudKitDatabase: .none
-        )
+        // AN IN-MEMORY STORE MUST NOT CARRY A FILE-BACKED NAME.
+        //
+        // This passed the name "Amblyo" in both cases. A named configuration
+        // resolves to a file URL, so even with `isStoredInMemoryOnly` the
+        // store still reached for Application Support/Amblyo.store — which is
+        // why EVERY CI run, green or red, printed:
+        //
+        //     CoreData: error: Failed to stat path '.../Amblyo.store'
+        //     Failed to statfs file; errno 2 / No such file or directory.
+        //
+        // Those lines were dismissed as simulator noise for eleven runs. They
+        // were the store describing a contradiction it had been handed, and
+        // the app then aborted inside `NSSQLFetchRequestContext
+        // _createStatement` — a fetch against a store that could not decide
+        // where it lived.
+        //
+        // Named on disk, anonymous in memory.
+        let configuration = inMemory
+            ? ModelConfiguration(
+                schema: AmblyoSchema.current,
+                isStoredInMemoryOnly: true,
+                allowsSave: true,
+                cloudKitDatabase: .none)
+            : ModelConfiguration(
+                "Amblyo",
+                schema: AmblyoSchema.current,
+                isStoredInMemoryOnly: false,
+                allowsSave: true,
+                cloudKitDatabase: .none)
         return try ModelContainer(
             for: AmblyoSchema.current,
             migrationPlan: AmblyoMigrationPlan.self,

@@ -129,7 +129,34 @@ jobs:
               [ -e "$file" ] || continue
               found=1
               echo "----- $file -----"
-              head -c 6000 "$file"
+              # PARSED, NOT TRUNCATED. The previous version printed the first
+              # 6000 bytes, which is the header — the reason string an uncaught
+              # NSException carries sits in `asi`, further down, so the one
+              # field that names the bug was the one field cut off.
+              python3 - "$file" <<'PY'
+          import json, sys
+          raw = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          # An .ips is one JSON header line followed by the payload object.
+          parts = raw.split("\n", 1)
+          try:
+              payload = json.loads(parts[1])
+          except Exception:
+              print(raw[:3000]); sys.exit()
+          print("exception :", payload.get("exception"))
+          print("termination:", payload.get("termination"))
+          asi = payload.get("asi") or {}
+          for lib, messages in asi.items():
+              for m in messages:
+                  print("REASON [%s]: %s" % (lib, m))
+          for note in payload.get("notes", []) or []:
+              print("note:", note)
+          faulting = payload.get("faultingThread", 0)
+          threads = payload.get("threads", [])
+          if faulting < len(threads):
+              print("--- faulting thread %d ---" % faulting)
+              for frame in threads[faulting].get("frames", [])[:30]:
+                  print("   ", frame.get("symbol", frame.get("imageOffset")))
+          PY
               echo
             done
           done

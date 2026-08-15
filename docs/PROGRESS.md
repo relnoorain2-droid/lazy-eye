@@ -288,3 +288,49 @@ at ~72% adherence, 2-3 exercises per session, 28-44 trials each — about 6,500
 `TrialRecord` inserts plus ~180 sessions, all on the main actor. That is a
 suspect for a watchdog termination, but it is a suspect, not a conclusion, and
 the next run will say rather than suggest.
+
+## CI 58 — the crash report arrived, and the logs had been saying it all along
+
+The crash step worked. The app is not being killed; it aborts itself:
+
+    exception: EXC_CRASH / SIGABRT      termination: Abort trap: 6, byProc Amblyo
+    -[NSSQLFetchRequestContext _createStatement]
+    objc_exception_throw
+
+Two facts settle a lot. `AMBLYO-SEED: starting` was NEVER printed, so the crash
+happens BEFORE seeding — the seeder was never the culprit, and three runs spent
+moving it around were wasted. And the stack is a FETCH, not an insert.
+
+The cause was in every log from the beginning:
+
+    CoreData: error: Failed to stat path '.../Application Support/Amblyo.store'
+    CoreData: error: Failed to statfs file; errno 2 / No such file or directory.
+
+Present in green runs and red ones alike, so it was filed as simulator noise.
+It is not noise. `ModelConfiguration` was constructed with the name "Amblyo" in
+BOTH cases, and a named configuration resolves to a file URL — so even with
+`isStoredInMemoryOnly: true` the store reached for a file that does not exist.
+A fetch against a store that cannot decide where it lives throws inside
+statement creation, and an uncaught ObjC exception is an abort.
+
+Which explains the shape of every failure: the UI test that passes
+`-uitest-seed-demo-data` gets `isUITesting`, gets the in-memory container, and
+dies. `testLaunchPerformance` passes no arguments, gets the on-disk container,
+and has passed every single time. That asymmetry was visible from run one and I
+read it as "the seeding path is broken" rather than "the in-memory path is
+broken".
+
+Named on disk, anonymous in memory.
+
+The crash step also now PARSES the .ips instead of printing its first 6000
+bytes. The reason string an uncaught NSException carries lives in `asi`, further
+down the file — so the one field that names the bug was the one field the
+truncation removed.
+
+### The lesson worth keeping
+
+Eleven runs of "CoreData: error" in the log were treated as background noise
+because they appeared in passing runs too. A diagnostic that is always present
+stops being read. The fix is not to try harder; it is that an error line in a
+green build should either be actioned or silenced, because one that is neither
+will be invisible on the day it matters.
