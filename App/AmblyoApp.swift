@@ -151,6 +151,21 @@ struct RootView: View {
                                   flagSaysComplete: launchState.hasCompletedOnboarding)
     }
 
+    /// What the UI tests read to find out WHICH screen they are looking at.
+    ///
+    /// Three CI runs were spent guessing why the smoke test could not find a
+    /// "Today" tab, because a failing XCUITest can say "element not found" and
+    /// nothing else — the hierarchy dump it prints is swallowed by the log
+    /// formatter. The app can simply say which branch it took, and then a
+    /// failure names its own cause.
+    ///
+    /// The profile count rides along because "setup is showing" has two very
+    /// different meanings — no profile, or a profile the flag is hiding — and
+    /// they need different fixes.
+    private var stateIdentifier: String {
+        "root:\(needsOnboarding ? "onboarding" : "main"):profiles-\(profiles.count)"
+    }
+
     var body: some View {
         Group {
             if needsOnboarding {
@@ -159,6 +174,7 @@ struct RootView: View {
                 MainTabView()
             }
         }
+        .accessibilityIdentifier(stateIdentifier)
         .animation(.easeInOut(duration: 0.25), value: needsOnboarding)
         // NO `onAppear` RECONCILIATION HERE, AND IT WAS WRITTEN AND REMOVED.
         //
@@ -266,6 +282,12 @@ struct MainTabView: View {
                     NavigationStack { destination(for: tab) }
                         .tabItem { Label(tab.title, systemImage: tab.systemImage) }
                         .tag(tab)
+                        // A STABLE IDENTIFIER, BECAUSE THE VISIBLE LABEL IS NOT
+                        // A STABLE TEST HOOK. The tab bar's rendering is
+                        // Apple's, it changes between iOS versions, and a test
+                        // that searches for the word "Today" is really asserting
+                        // how the system chose to draw a tab this year.
+                        .accessibilityIdentifier("tab.\(tab.rawValue)")
                 }
             }
         }

@@ -206,3 +206,32 @@ permanently once the profile arrived a frame later — the original bug from the
 opposite direction. It is gone, and it was not needed: `needsOnboarding` reads
 the store on every evaluation, so a stale flag cannot misroute anyone. Deriving
 the answer beats caching it and then repairing the cache.
+
+## CI 55 — stop guessing, make the app say what it is showing
+
+No crash this time, so reverting the `init()` seeding was right. Back to
+"Could not find a 'Today' element", which is the message that has now cost
+three runs, because it is all the log contains: the test printed
+`app.debugDescription`, and xcbeautify keeps the first line of a failure and
+discards the rest.
+
+Two changes, and neither of them guesses at the cause.
+
+**`RootView` publishes its own state as an accessibility identifier** —
+`root:main:profiles-1` or `root:onboarding:profiles-0`. The next failure will
+name its own cause instead of leaving two very different diagnoses open: seeding
+never landed, or routing is fine and the tab bar simply is not queryable by its
+label. The profile count is in there because "setup is showing" means different
+things depending on it.
+
+**The Today tab carries `tab.today`, and the test prefers it.** Searching for the
+word "Today" was really asserting how the system chose to draw a tab bar this
+year. On the device screenshots the tab bar is the iOS 26 floating pill, whose
+accessibility tree is not the one this test was written against — and the user's
+own screenshots prove the app DOES reach that tab bar when a profile exists. If
+that is the whole story, this run goes green; if not, the identifier says so.
+
+Worth recording: the seeder's unit tests pass and always did. They build their
+own `ModelContext` and read back from it, which proves the seeding logic and
+proves nothing about `mainContext` plus `@Query` observation in the running app.
+A test can be completely correct and still not cover the thing that breaks.
