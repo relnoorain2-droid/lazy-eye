@@ -106,6 +106,36 @@ jobs:
       - name: Build and test
         run: bundle exec fastlane ci
 
+      # PRINT THE CRASH REPORT INTO THE LOG, NOT JUST INTO AN ARTIFACT.
+      #
+      # Six CI runs were spent on a UI test failure whose real cause was the app
+      # terminating at launch. The crash report existed the whole time, inside
+      # the .xcresult artifact — which nobody working from the log can open. An
+      # artifact that has to be downloaded to be read is not a diagnostic during
+      # a debugging loop; it is a diagnostic after one.
+      #
+      # `head` rather than the whole file: the exception type, the termination
+      # reason and the first frames are what identify a crash, and the rest is
+      # thread dumps nobody reads.
+      - name: Print simulator crash reports
+        if: failure()
+        run: |
+          set +e
+          echo "=== Crash reports for Amblyo ==="
+          found=0
+          for dir in ~/Library/Logs/DiagnosticReports \
+                     ~/Library/Developer/CoreSimulator/Devices/*/data/Library/Logs/DiagnosticReports; do
+            for file in "$dir"/Amblyo*; do
+              [ -e "$file" ] || continue
+              found=1
+              echo "----- $file -----"
+              head -c 6000 "$file"
+              echo
+            done
+          done
+          [ "$found" -eq 0 ] && echo "No crash report found — the app may have been killed rather than crashing."
+          exit 0
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7

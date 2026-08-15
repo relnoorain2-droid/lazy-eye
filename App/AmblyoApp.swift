@@ -122,8 +122,20 @@ struct AmblyoApp: App {
                     //
                     // Writes still land in the same store, so `@Query` picks
                     // them up on the next update — which is the whole point.
+                    // PRINTED, NOT LOGGED. `os.Logger` output does not reach the
+                    // xcodebuild log, and that log is the only view available
+                    // when working without a Mac. The app's stdout DOES reach
+                    // it — the CoreData warnings in every CI run arrive that
+                    // way. Six runs were spent unable to tell "seeding crashed"
+                    // from "seeding finished and something after it crashed";
+                    // these two lines settle that permanently, and they only
+                    // run behind a launch argument no shipping build passes.
+                    print("AMBLYO-SEED: starting")
                     let seedContext = ModelContext(modelContainer)
                     DemoDataSeeder.seed(into: seedContext)
+                    let count = (try? seedContext.fetchCount(
+                        FetchDescriptor<Profile>())) ?? -1
+                    print("AMBLYO-SEED: finished, profiles=\(count)")
                 }
                 .task {
                     await subscriptions.start()

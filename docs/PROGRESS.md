@@ -261,3 +261,30 @@ The smoke test also checks the app is still alive on every pass of its wait loop
 now. "The thing I am looking at stopped existing" and "the thing I am looking
 for is not there" are different failures and were reported identically, which is
 the whole reason this took five runs instead of one.
+
+## CI 57 — a separate context did not fix it, and the tooling gets fixed first
+
+`The app terminated during launch. State: 1` — the new check reported it
+cleanly, and seeding into its own `ModelContext` did NOT stop the termination.
+So the cause is not `mainContext` contention, and that was another hypothesis
+rather than a finding.
+
+Six runs in, the honest problem is not the bug — it is that nothing in the loop
+can see the bug. The crash report has existed the whole time inside the
+`.xcresult` artifact, which cannot be read from a CI log. So this round changes
+the instruments rather than the app:
+
+- CI prints any Amblyo crash report into the job log on failure. An artifact
+  that must be downloaded to be read is a diagnostic AFTER a debugging loop, not
+  during one.
+- The seeding path prints `AMBLYO-SEED: starting` and `AMBLYO-SEED: finished,
+  profiles=N` to stdout, which does reach the xcodebuild log — the CoreData
+  warnings in every run arrive the same way. `os.Logger` does not. That single
+  distinction separates "seeding crashed" from "seeding finished and something
+  after it crashed", which six runs could not tell apart.
+
+The volume is worth recording while it is measured rather than assumed: 84 days
+at ~72% adherence, 2-3 exercises per session, 28-44 trials each — about 6,500
+`TrialRecord` inserts plus ~180 sessions, all on the main actor. That is a
+suspect for a watchdog termination, but it is a suspect, not a conclusion, and
+the next run will say rather than suggest.
