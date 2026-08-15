@@ -67,21 +67,21 @@ struct AmblyoApp: App {
             }
         }
 
-        // SEEDED HERE, BEFORE THE FIRST FRAME, NOT IN A `.task`.
+        // NO SWIFTDATA WORK HERE. See the seeding task in `body`.
         //
-        // It used to run inside the scene's `.task`, AFTER `subscriptions
-        // .start()`, so the demo profile did not exist until a StoreKit product
-        // lookup had finished. Once routing started requiring a profile, the
-        // smoke test launched, found no profile, and correctly showed setup —
-        // then waited thirty seconds for a "Today" tab that was queued behind a
-        // network call.
+        // The previous attempt seeded the demo fixture in this initialiser, to
+        // guarantee a profile existed before the first frame. The app then died
+        // at launch — "Lost connection to the app" — on the one UI test that
+        // passes the seeding argument, while the launch WITHOUT it was fine.
+        // Touching `modelContainer.mainContext` before the container has been
+        // attached to the scene is the difference between those two launches,
+        // and one initialiser is not the place to find out what SwiftData is
+        // willing to do that early.
         //
-        // Test fixtures that the first frame depends on must exist before the
-        // first frame. There is no amount of waiting in the test that fixes
-        // that honestly.
-        if LaunchArguments.shouldSeedDemoData {
-            DemoDataSeeder.seed(into: modelContainer.mainContext)
-        }
+        // The race it was trying to fix was never about `init` anyway: seeding
+        // sat behind a StoreKit network call. That is fixed by giving it its
+        // own task, which costs a frame or two of setup screen in a test run
+        // and nothing in production.
     }
 
     var body: some Scene {
@@ -90,12 +90,23 @@ struct AmblyoApp: App {
                 .environment(settings)
                 .environment(subscriptions)
                 .environment(launchState)
-                // TWO TASKS, DELIBERATELY. Audio is local and instant; StoreKit
-                // reaches the network and may take seconds or, behind a sandbox
-                // sign-in prompt, far longer. Sequencing them meant everything
-                // after the slow one waited on it — the bug behind both the
-                // permanent "Checking…" and the smoke-test timeout.
+                // THREE TASKS, NOT ONE CHAIN. These were sequential statements
+                // in a single `.task`, which meant each one waited on the one
+                // before it. Only StoreKit touches the network, and it was
+                // first, so it held up everything: entitlements stayed
+                // `.unknown` and Profile read "Checking…" indefinitely, and the
+                // demo fixture did not exist until a product lookup returned,
+                // which timed out the smoke test.
+                //
+                // Independent work gets independent tasks. The only ordering
+                // that ever mattered was audio-before-first-sound, and that is
+                // satisfied by it starting at launch rather than by it being
+                // first in a queue.
                 .task { AudioEngine.configureSession() }
+                .task {
+                    guard LaunchArguments.shouldSeedDemoData else { return }
+                    DemoDataSeeder.seed(into: modelContainer.mainContext)
+                }
                 .task {
                     await subscriptions.start()
                 }
@@ -149,13 +160,19 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: needsOnboarding)
-        .onAppear {
-            // Reconcile the stale flag, so this is self-healing rather than
-            // re-deciding it on every launch.
-            if profiles.isEmpty, launchState.hasCompletedOnboarding {
-                launchState.hasCompletedOnboarding = false
-            }
-        }
+        // NO `onAppear` RECONCILIATION HERE, AND IT WAS WRITTEN AND REMOVED.
+        //
+        // The first version cleared a stale flag on appearance, to "heal" it
+        // rather than re-decide every launch. That reintroduces the same class
+        // of bug from the other side: on the first frame the profile may not
+        // exist YET — a seeded test run, a store still opening — and clearing
+        // the flag then would strand the user in setup permanently even once
+        // the profile arrived a frame later.
+        //
+        // The reconciliation is also unnecessary. `needsOnboarding` reads the
+        // store every time, so a stale flag cannot route anyone wrongly, and
+        // finishing setup sets the flag honestly. Deriving the answer beats
+        // caching it and then repairing the cache.
     }
 }
 

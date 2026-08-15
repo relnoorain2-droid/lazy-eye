@@ -178,3 +178,31 @@ Two changes, and the second is the general one:
 That the smoke test passed for eleven builds while the app could not reach setup
 is the thing worth remembering. It asserted the app drew a tab bar, and the app
 drew a tab bar. It never asked whether the tab bar was usable.
+
+## CI 54 — seeding in `init()` killed the app at launch
+
+466 tests, 1 failure, and a different one: `Failed to get matching snapshots:
+Lost connection to the app`. The app CRASHED. The tell is that
+`testLaunchPerformance`, which launches WITHOUT `-uitest-seed-demo-data`, passed
+in 2.6 seconds — so the crash belonged to the seeding path added in the previous
+commit, not to launch in general.
+
+Seeding moved into `AmblyoApp.init()` to guarantee a profile before the first
+frame. That means touching `modelContainer.mainContext` before the container has
+been attached to the scene, and an initialiser is not the place to discover what
+SwiftData will tolerate that early. Reverted.
+
+The race it was meant to fix was never about `init` — seeding sat behind a
+StoreKit network call inside one sequential `.task`. Independent work now gets
+independent tasks: audio, seeding, StoreKit. The only ordering that ever
+mattered was audio-before-first-sound, and that is satisfied by starting at
+launch rather than by being first in a queue.
+
+**And a bug caught before it shipped, in code written yesterday.** The stale-flag
+reconciliation in `RootView.onAppear` cleared the completion flag whenever no
+profile was present. On the first frame of a seeded run the profile does not
+exist YET, so it would have cleared the flag and stranded the user in setup
+permanently once the profile arrived a frame later — the original bug from the
+opposite direction. It is gone, and it was not needed: `needsOnboarding` reads
+the store on every evaluation, so a stale flag cannot misroute anyone. Deriving
+the answer beats caching it and then repairing the cache.
