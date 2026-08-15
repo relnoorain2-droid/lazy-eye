@@ -151,3 +151,30 @@ SwiftUI `body`, and a `body` cannot be asked a question. It is a function now
 with five cases in `RootRoutingTests`, including the exact stale-flag state that
 shipped. The general lesson: every test in this project examines values, and the
 one thing that had never been examined was whether the app comes up.
+
+## CI 53 — the smoke test failed, and it was right to
+
+One failure: `SmokeUITests.testAppLaunchesAndShowsNavigation` — "Could not find
+a 'Today' element". Not a regression in the fix. The fix made that test MEAN
+something for the first time.
+
+It launches with `-uitest-seed-demo-data`, and the demo profile was created
+inside the scene's `.task`, AFTER `await subscriptions.start()` — a StoreKit
+product lookup. While routing keyed off a UserDefaults flag, that did not
+matter: the tab bar appeared regardless of whether any data existed, which is
+precisely the blindness that let build 2 ship. Now that routing requires a
+profile, the test launched, correctly saw no profile, correctly showed setup,
+and waited thirty seconds for a tab that was queued behind a network call.
+
+Two changes, and the second is the general one:
+
+- The demo fixture is seeded in `init()`, before the first frame. A fixture the
+  first frame depends on has to exist before the first frame; no amount of
+  waiting in the test fixes that honestly.
+- Launch work is split into two `.task`s. Audio is local and instant, StoreKit
+  reaches the network. Sequencing them put everything behind the slow one — the
+  same root cause as the permanent "Checking…", showing up in a second place.
+
+That the smoke test passed for eleven builds while the app could not reach setup
+is the thing worth remembering. It asserted the app drew a tab bar, and the app
+drew a tab bar. It never asked whether the tab bar was usable.

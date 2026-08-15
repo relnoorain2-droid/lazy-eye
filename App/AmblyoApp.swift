@@ -66,6 +66,22 @@ struct AmblyoApp: App {
                 storeWasReset = true
             }
         }
+
+        // SEEDED HERE, BEFORE THE FIRST FRAME, NOT IN A `.task`.
+        //
+        // It used to run inside the scene's `.task`, AFTER `subscriptions
+        // .start()`, so the demo profile did not exist until a StoreKit product
+        // lookup had finished. Once routing started requiring a profile, the
+        // smoke test launched, found no profile, and correctly showed setup —
+        // then waited thirty seconds for a "Today" tab that was queued behind a
+        // network call.
+        //
+        // Test fixtures that the first frame depends on must exist before the
+        // first frame. There is no amount of waiting in the test that fixes
+        // that honestly.
+        if LaunchArguments.shouldSeedDemoData {
+            DemoDataSeeder.seed(into: modelContainer.mainContext)
+        }
     }
 
     var body: some Scene {
@@ -74,12 +90,14 @@ struct AmblyoApp: App {
                 .environment(settings)
                 .environment(subscriptions)
                 .environment(launchState)
+                // TWO TASKS, DELIBERATELY. Audio is local and instant; StoreKit
+                // reaches the network and may take seconds or, behind a sandbox
+                // sign-in prompt, far longer. Sequencing them meant everything
+                // after the slow one waited on it — the bug behind both the
+                // permanent "Checking…" and the smoke-test timeout.
+                .task { AudioEngine.configureSession() }
                 .task {
                     await subscriptions.start()
-                    AudioEngine.configureSession()
-                    if LaunchArguments.shouldSeedDemoData {
-                        DemoDataSeeder.seed(into: modelContainer.mainContext)
-                    }
                 }
         }
         .modelContainer(modelContainer)
