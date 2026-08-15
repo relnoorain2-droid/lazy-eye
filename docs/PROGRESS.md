@@ -334,3 +334,57 @@ because they appeared in passing runs too. A diagnostic that is always present
 stops being read. The fix is not to try harder; it is that an error line in a
 green build should either be actioned or silenced, because one that is neither
 will be invisible on the day it matters.
+
+## CI 59 — found it, and it was in the app, not the test
+
+Eighth consecutive failure of the same test, and the parsed crash report named
+the line:
+
+    SIGABRT / Abort trap: 6, byProc Amblyo
+    objc_exception_rethrow
+    NSManagedObjectContext.performAndWait
+    SessionRepository.trials(for:exerciseID:limit:)
+    TodayView...
+
+The defect:
+
+    $0.session?.profile?.id == profileID
+
+Two optional relationship hops in one `#Predicate`. Core Data cannot build SQL
+for it. It does not return an error or an empty set — it throws an
+Objective-C exception inside `_createStatement`, and an uncaught ObjC exception
+is SIGABRT.
+
+**This was never a test problem.** The Today screen crashed the app for any
+profile with history. The UI test was the only thing in the project that ever
+put data on that screen, so it was the only thing that ever saw it — and the
+user would have hit it the moment they finished setup. Eight red runs were the
+system working, however bad they looked.
+
+One optional hop is fine; `sessions(for:)` has always done that. So the query is
+split at the boundary Core Data can express, and the rest is filtered in memory.
+
+### Three things added so this cannot recur
+
+- `RepositoryExecutionTests` calls EVERY repository read once against the full
+  seeded store. The assertions are deliberately weak — the point is not what the
+  queries return, it is that they return at all. A `#Predicate` is compiled a
+  second time, at runtime, by Core Data, and the only way to know that
+  compilation succeeds is to run it. Not one of the 466 existing tests had ever
+  called `trials(for:exerciseID:)`.
+- `scripts/check_predicates.py` bans chained optional traversal in any
+  `#Predicate`, on the free Linux runner, before a macOS minute is spent. It was
+  verified by planting the bug and watching it fail, then removing it — a check
+  that has never failed is not known to work.
+- The crash-report step now parses the `.ips` rather than truncating it. It paid
+  for itself on its second run.
+
+### The count, since it was asked for
+
+Eight failures. Five of them I attributed to a cause that turned out to be
+wrong: the render limit, the option counts, init-time seeding, mainContext
+contention, the in-memory configuration name. Each was a real defect and worth
+fixing, and none of them was THIS. The pattern is clear enough to write down:
+I read a symptom, formed a plausible story, and shipped the story as a
+diagnosis. The run that broke the cycle was the one that spent its effort on
+making the failure legible instead of on guessing what it meant.

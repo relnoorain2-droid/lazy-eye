@@ -94,18 +94,38 @@ struct SessionRepository {
     }
 
     /// Trials for one exercise, newest first. Input to threshold estimation.
+    ///
+    /// WHY THIS DOES NOT USE ONE PREDICATE, WHICH IS WHAT IT LOOKS LIKE IT WANTS.
+    ///
+    /// It used to, and the predicate was:
+    ///
+    ///     $0.exerciseID == exerciseID
+    ///         && $0.session?.profile?.id == profileID
+    ///         && !$0.discarded
+    ///
+    /// The middle line traverses TWO optional relationships in a row. Core Data
+    /// cannot build SQL for that: it throws an Objective-C exception inside
+    /// `NSSQLFetchRequestContext _createStatement`, and an uncaught ObjC
+    /// exception is `SIGABRT`. The app did not misbehave, it died — every time
+    /// Today rendered for a profile that had any history.
+    ///
+    /// It compiles, it reads perfectly, and no unit test caught it because the
+    /// repository tests exercise the store through a context that was never
+    /// asked for this shape. It only fires with real data on screen, which is
+    /// why it survived to TestFlight and cost eight CI runs to find.
+    ///
+    /// ONE optional hop is fine — `sessions(for:)` above does exactly that and
+    /// has always worked. So the query is split at the boundary Core Data can
+    /// actually express, and the second half is done in memory. A profile's
+    /// sessions are already bounded by `limit`, and walking their `trials`
+    /// relationship touches no SQL at all.
     func trials(for profile: Profile, exerciseID: String, limit: Int = 200) throws -> [TrialRecord] {
-        let profileID = profile.id
-        var descriptor = FetchDescriptor<TrialRecord>(
-            predicate: #Predicate {
-                $0.exerciseID == exerciseID
-                    && $0.session?.profile?.id == profileID
-                    && !$0.discarded
-            },
-            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
-        )
-        descriptor.fetchLimit = limit
-        return try context.fetch(descriptor)
+        let sessions = try sessions(for: profile)
+        let matching = sessions
+            .flatMap(\.trials)
+            .filter { $0.exerciseID == exerciseID && !$0.discarded }
+            .sorted { $0.timestamp > $1.timestamp }
+        return Array(matching.prefix(limit))
     }
 
     /// Distinct days with at least one adherence-qualifying session, newest first.

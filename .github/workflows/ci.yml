@@ -52,6 +52,9 @@ jobs:
       # wrong type. Three CI rounds have now been spent on exactly these, each
       # costing four minutes of macOS time at the 10x rate to learn something a
       # second of Python on a free runner can tell us. See scripts/check_symbols.py.
+      - name: SwiftData predicates Core Data can actually translate
+        run: python3 scripts/check_predicates.py
+
       - name: No duplicate or misplaced symbols
         run: python3 scripts/check_symbols.py
 
