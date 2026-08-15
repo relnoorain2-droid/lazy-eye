@@ -78,11 +78,22 @@ final class SettingsStore {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
-        // `bool(forKey:)` returns false for a missing key, which is exactly the
-        // default we want for every audio channel. Stated explicitly rather than
-        // relied upon implicitly.
+        // SOUND EFFECTS NOW DEFAULT **ON**, AND THE REASONING CHANGED.
+        //
+        // Every channel used to default off, on the argument that an app which
+        // makes noise without being asked is rude. That argument was sound and
+        // the conclusion was wrong, because the audio session is `.ambient`:
+        // the hardware silent switch already silences us and the user's own
+        // music already keeps playing. The thing being protected against cannot
+        // happen, and the cost was real — the first device test found an app
+        // where answering a question produced no sound at all, which does not
+        // read as tasteful restraint. It reads as broken.
+        //
+        // Music and spoken guidance stay off. Those are preferences. A short
+        // tone confirming a tap is feedback, and feedback is not optional
+        // furniture.
         musicEnabled = defaults.bool(forKey: Self.key("audio.music"))
-        soundEffectsEnabled = defaults.bool(forKey: Self.key("audio.sfx"))
+        soundEffectsEnabled = defaults.object(forKey: Self.key("audio.sfx")) as? Bool ?? true
         voiceGuidanceEnabled = defaults.bool(forKey: Self.key("audio.voice"))
         masterMuted = defaults.bool(forKey: Self.key("audio.masterMuted"))
         hasSeenSoundChoice = defaults.bool(forKey: Self.key("audio.seenChoice"))

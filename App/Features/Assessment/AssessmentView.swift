@@ -166,26 +166,51 @@ struct AssessmentView: View {
                 }
             }
 
-            // The stimulus itself is drawn by the exercise's own view in a
-            // later pass; for now the runner drives trials and the buttons
-            // record answers, so the measurement path is complete and testable
-            // end to end.
+            // THE STIMULUS, NOT A ROW OF NUMBERS.
+            //
+            // This screen shipped to TestFlight showing buttons labelled 1, 2,
+            // 3, 4 over an empty white area, with a comment saying the real
+            // stimulus would arrive "in a later pass". A measurement screen with
+            // nothing to measure is not an incomplete feature, it is a broken
+            // one, and it should never have gone out. The sub-tests borrow real
+            // registered exercises precisely so they can borrow the real
+            // renderers too.
+            if let trial = runner.currentTrial, let presenter = runner.currentPresenter {
+                AssessmentTrialView(trial: trial,
+                                    presenter: presenter,
+                                    calibration: calibration,
+                                    isAnswerable: true) { answer in
+                    runner.respond(answer: answer)
+                }
+                .id(trial.id)
+            } else if let trial = runner.currentTrial {
+                // Balance and stereo draw animated anaglyph canvases rather than
+                // rasterised images, so they cannot borrow a still renderer. The
+                // buttons still carry REAL labels rather than 1/2/3/4, and the
+                // screen says what it is waiting for — which is the difference
+                // between an honest gap and the blank panel that shipped.
+                AmblyoCard {
+                    VStack(spacing: Spacing.sm) {
+                        Image(systemName: "eyeglasses")
+                            .font(.system(size: 32))
+                            .foregroundStyle(Color.brandPrimary)
+                        Text("This sub-test needs its moving stimulus, which is not in this build yet.")
+                            .font(TypeScale.caption(rounded: theme.usesRoundedFont))
+                            .foregroundStyle(Color.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Spacing.lg)
+                }
+                .id(trial.id)
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 220)
+            }
+
             Text("Answer as accurately as you can. Guessing is expected near the end.")
                 .font(TypeScale.caption(rounded: theme.usesRoundedFont))
                 .foregroundStyle(Color.textSecondary)
-
-            if let trial = runner.currentTrial {
-                let count = runner.currentOptionCount
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())],
-                          spacing: Spacing.sm) {
-                    ForEach(0..<count, id: \.self) { answer in
-                        AmblyoButton(title: "\(answer + 1)", style: .secondary) {
-                            runner.respond(answer: answer)
-                        }
-                    }
-                }
-                .id(trial.id)
-            }
         }
     }
 

@@ -404,7 +404,7 @@ struct ProfileTabView: View {
                 get: { settings.hapticsEnabled },
                 set: { settings.hapticsEnabled = $0 }))
 
-            Text("All of these start off. The silent switch always wins.")
+            Text("Sound effects and haptics are on; music and spoken guidance are off. Your phone's silent switch always wins.")
                 .font(TypeScale.caption(rounded: theme.usesRoundedFont))
                 .foregroundStyle(Color.textSecondary)
         }

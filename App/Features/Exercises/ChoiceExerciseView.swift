@@ -60,27 +60,67 @@ struct ChoiceExerciseView<Presenter: ChoiceExercisePresenter>: View {
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
-        ZStack {
-            Color.stimulusNeutral.ignoresSafeArea()
-
+        Group {
             switch runner.phase {
             case .ready:
-                readyState
+                readyState.sessionBackdrop()
+
             case .presenting, .feedback:
-                trialState
+                // Seven exercises render through this one view, so it is the
+                // highest-leverage adoption of ExerciseStage in the project.
+                // The grey field is now a defined surface rather than the whole
+                // screen — see docs/16-EXERCISE-STAGE-SPEC.md section 1 for why
+                // the grey itself cannot be restyled.
+                ExerciseStage(
+                    title: runner.descriptor.title,
+                    secondsRemaining: runner.secondsRemaining,
+                    secondsTotal: runner.plannedSessionSeconds,
+                    onPause: { runner.pause() },
+                    onFatigue: { runner.reportFatigue() }
+                ) {
+                    stimulusLayer
+                } answers: {
+                    answerButtons
+                }
+
             case .onBreak(let remaining):
-                BreakCard(secondsRemaining: remaining)
+                BreakCard(secondsRemaining: remaining).sessionBackdrop()
+
             case .paused:
-                pausedState
+                pausedState.sessionBackdrop()
+
             case .finished(let reason):
                 SessionSummaryView(runner: runner, reason: reason) { onFinish(reason) }
             }
         }
-        .overlay(alignment: .top) { statusBar }
-        .overlay(alignment: .bottom) { controls }
         .statusBarHidden(runner.phase.acceptsResponses)
         .onChange(of: runner.currentTrial?.id) { _, _ in renderStimulus() }
         .onDisappear { runner.stop() }
+    }
+
+    /// The stimulus, positioned by the presenter's offset, and its feedback
+    /// mark. The offset is a FRACTION of the field, which is why this needs a
+    /// `GeometryReader` — and why the field's size must not depend on the
+    /// stimulus inside it, or the two would chase each other.
+    private var stimulusLayer: some View {
+        GeometryReader { geometry in
+            ZStack {
+                if let stimulus, runner.phase.acceptsResponses {
+                    Image(decorative: stimulus, scale: displayScale)
+                        .interpolation(.none)          // never resample a stimulus
+                        .position(
+                            x: geometry.size.width / 2
+                                + stimulusOffset.x * geometry.size.width * 0.26,
+                            y: geometry.size.height / 2
+                                + stimulusOffset.y * geometry.size.height * 0.18
+                        )
+                        .accessibilityHidden(true)
+                }
+                if case .feedback(let correct) = runner.phase {
+                    ChoiceFeedbackMark(correct: correct)
+                }
+            }
+        }
     }
 
     // MARK: States
@@ -121,30 +161,6 @@ struct ChoiceExerciseView<Presenter: ChoiceExercisePresenter>: View {
         .readableContentWidth()
     }
 
-    private var trialState: some View {
-        GeometryReader { geometry in
-            ZStack {
-                if let stimulus, runner.phase.acceptsResponses {
-                    Image(decorative: stimulus, scale: displayScale)
-                        .interpolation(.none)          // never resample a stimulus
-                        .position(
-                            x: geometry.size.width / 2
-                                + stimulusOffset.x * geometry.size.width * 0.26,
-                            y: geometry.size.height / 2
-                                + stimulusOffset.y * geometry.size.height * 0.18
-                        )
-                        .accessibilityHidden(true)
-                }
-                if case .feedback(let correct) = runner.phase {
-                    ChoiceFeedbackMark(correct: correct)
-                }
-            }
-        }
-        .overlay(alignment: .bottom) {
-            answerButtons.padding(.horizontal, Spacing.lg).padding(.bottom, 96)
-        }
-    }
-
     private var answerButtons: some View {
         // Per-trial where the exercise needs it (M6's letters), otherwise the
         // fixed set. Falls back to the fixed set between trials so the buttons
@@ -160,24 +176,11 @@ struct ChoiceExerciseView<Presenter: ChoiceExercisePresenter>: View {
             spacing: Spacing.md
         ) {
             ForEach(Array(answers.enumerated()), id: \.offset) { index, answer in
-                Button {
+                AnswerButton(title: answer.label,
+                             systemImage: answer.systemImage,
+                             isEnabled: runner.phase.acceptsResponses) {
                     runner.respond(answer: index)
-                } label: {
-                    VStack(spacing: Spacing.xs) {
-                        Image(systemName: answer.systemImage).font(.system(size: 24))
-                        Text(answer.label)
-                            .font(TypeScale.callout().weight(.semibold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: answers.count <= 2 ? 88 : 68)
-                    .background(Color.surfaceRaised)
-                    .clipShape(RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
                 }
-                .buttonStyle(PressableButtonStyle())
-                .disabled(!runner.phase.acceptsResponses)
-                .accessibilityLabel(answer.label)
             }
         }
     }

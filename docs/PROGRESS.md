@@ -388,3 +388,74 @@ fixing, and none of them was THIS. The pattern is clear enough to write down:
 I read a symptom, formed a plausible story, and shipped the story as a
 diagnosis. The run that broke the cycle was the one that spent its effort on
 making the failure legible instead of on guessing what it meant.
+
+## Device test 2 — "very bad visuals, none of them proper, no sound at all"
+
+Correct on both counts, and the second one is not a matter of taste.
+
+### What was actually true
+
+`AudioEngine.play()` ended at `// Phase 3: actual playback` and the project
+contained zero audio files. Four toggles in Settings controlled nothing. The
+comment that was supposed to prevent this — "the gate exists from day one so it
+can never be forgotten" — is exactly what caused it: a stub that reads as
+finished looks like nothing outstanding from any call site, and every call site
+was correct.
+
+The Check-in screen shipped showing buttons labelled 1, 2, 3, 4 over an empty
+panel, with a comment promising the stimulus "in a later pass". The measurement
+path underneath was complete and tested, which is why it felt like an acceptable
+staging point. It was not. A measurement screen with nothing to measure is not a
+partially-built feature.
+
+### What the reference app has that this did not
+
+Pulled frames from the video: full-bleed high-contrast moving patterns, a big
+countdown, chunky labelled buttons. Cruder work in every technical respect, and
+it READS as an app doing something. This read as a prototype: a small grey patch
+on a flat grey screen with two plain white rectangles and a nearly invisible
+timer.
+
+### The constraint that shaped the fix
+
+The grey is not a style choice and could not simply be replaced with something
+richer. A Gabor modulates luminance symmetrically about its background and clips
+against anything darker, so a "nicer" backdrop silently corrupts every threshold
+the app reports. That is a large part of why the reference app's numbers are
+meaningless — nothing about its presentation is controlled.
+
+So: the grey stays exactly where a stimulus is drawn, and NOWHERE ELSE. It had
+been filling the entire screen through one `ignoresSafeArea` at the top of every
+exercise view, including the ready, paused, break and summary screens, which
+have no stimulus on them at all. Confining it to a defined, rounded, shadowed
+field is most of the visual difference, and it changes no measured value.
+
+### Built
+
+- `docs/16-EXERCISE-STAGE-SPEC.md` — the frame, and the rule that the stimulus
+  is the one thing the frame may not touch.
+- `ExerciseStage` — one container: countdown ring instead of corner text,
+  defined stimulus field, 68 pt iconed answer buttons with press states.
+  Adopted by `ChoiceExerciseView`, which alone renders seven exercises.
+- Real audio. Tones are SYNTHESISED, not bundled: no licensing, no megabytes,
+  and every cue consistent with the others by construction because they come
+  from one function rather than from six files a stock pack happened to hold.
+  The envelope matters more than the frequency — a sine that starts at full
+  amplitude has a discontinuity at each edge, and a discontinuity is heard as a
+  click on top of the note.
+- Haptics, on a separate channel from sound on purpose: someone training on a
+  bus has sound off, and haptics are then the only confirmation a tap landed.
+- `SessionFeedback`, driven from `SessionRunner` rather than from 32 views. The
+  runner already knows the exact moment a trial is judged; putting the cue there
+  is one place to get right instead of 32 places to forget.
+
+### Two things stated rather than hidden
+
+Sound effects and haptics now default ON. The old argument — an app that makes
+noise unasked is rude — was reasonable and the conclusion was wrong, because the
+`.ambient` category means the hardware silent switch already wins.
+
+Check-in now renders real stimuli for acuity and contrast by bridging their
+training presenters. Balance and stereo draw ANIMATED anaglyph canvases frame by
+frame rather than producing an image, so they cannot borrow a still renderer;
+the screen now says so instead of showing a blank panel, and task #51 tracks it.

@@ -79,6 +79,20 @@ final class SessionRunner {
     private var trialShownAt: Date?
     private var clock: Task<Void, Never>?
 
+    /// Sound and haptics are driven from HERE, not from the 32 exercise views.
+    ///
+    /// The alternative was a `AudioEngine.play(.correct, …)` call in every view
+    /// that judges a trial, which is 32 places to add it, 32 places to forget
+    /// it, and a guarantee that some exercises would end up quieter than others
+    /// for no reason anyone could later explain. The runner already knows the
+    /// exact moment an answer is judged, a session starts, a break begins and a
+    /// session ends — every cue the app has, at its true source.
+    ///
+    /// Optional so tests can construct a runner without a settings store; when
+    /// it is nil the app is simply silent, which is the correct behaviour for a
+    /// unit test and not a failure.
+    var feedback: SessionFeedback?
+
     private static let log = Logger(subsystem: "com.amblyo.app", category: "session")
 
     // MARK: Init
@@ -142,6 +156,7 @@ final class SessionRunner {
         context.insert(session)
         record = session
 
+        feedback?.sessionStarted()
         startClock()
         presentNextTrial()
     }
@@ -170,6 +185,7 @@ final class SessionRunner {
             phase = remaining <= 1 ? .presenting : .onBreak(secondsRemaining: remaining - 1)
             if phase == .presenting {
                 breaks.recordBreakTaken(atElapsedSeconds: elapsedSeconds)
+                feedback?.breakEnded()
                 presentNextTrial()
             }
             return
@@ -184,6 +200,7 @@ final class SessionRunner {
         } else if breaks.isBreakDue(atElapsedSeconds: elapsedSeconds) {
             phase = .onBreak(secondsRemaining: breaks.breakSeconds)
             currentTrial = nil
+            feedback?.breakStarted()
         }
     }
 
@@ -250,6 +267,13 @@ final class SessionRunner {
         phase = .feedback(correct: correct)
         currentTrial = nil
 
+        // A DISCARDED TRIAL STILL GETS FEEDBACK, AND THAT IS DELIBERATE.
+        // The user tapped and saw a shape; whether the renderer dropped a frame
+        // is our problem, not theirs. Staying silent on those trials would make
+        // the app feel intermittently broken for a reason no user could ever
+        // work out.
+        feedback?.judged(correct: correct)
+
         Task { [weak self] in
             // Long enough to register, short enough not to become the pace of
             // the session. Feedback is confirmation, not celebration.
@@ -303,6 +327,10 @@ final class SessionRunner {
         try? context.save()
 
         phase = .finished(reason)
+        // Only for a session that ran its course. Someone who tapped "my eyes
+        // feel tired" does not need a chime, and celebrating a fatigue stop
+        // would be the app congratulating itself for a bad outcome.
+        if reason == .completed { feedback?.sessionCompleted() }
         Self.log.info("Session ended: \(reason.rawValue, privacy: .public), \(self.validTrialCount) valid trials")
     }
 
@@ -321,6 +349,13 @@ final class SessionRunner {
     }
 
     var secondsRemaining: Int { max(0, plannedSeconds - elapsedSeconds) }
+
+    /// The length this session was scheduled for. The countdown ring needs the
+    /// denominator, not just the remainder — `plannedSeconds` is private because
+    /// nothing outside should be able to change the session's length, but
+    /// reading it is harmless and the alternative was passing the same number
+    /// into every exercise view a second time.
+    var plannedSessionSeconds: Int { plannedSeconds }
 
     var progress: Double {
         guard plannedSeconds > 0 else { return 0 }

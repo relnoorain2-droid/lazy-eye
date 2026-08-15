@@ -109,6 +109,25 @@ final class AssessmentRunner {
         }
     }
 
+    /// The renderer for the current sub-test's stimulus, or nil where the
+    /// borrowed exercise draws itself live rather than producing an image.
+    ///
+    /// Acuity and contrast rasterise a stimulus, so they bridge straight across
+    /// from their training presenters and the check-in shows exactly what the
+    /// training screen shows. Balance and stereo are ANIMATED anaglyph canvases
+    /// — a moving dot field and a random-dot stereogram — which are drawn frame
+    /// by frame rather than rendered to an image, so they cannot be bridged the
+    /// same way and are not pretended to be.
+    ///
+    /// Nil is handled visibly by the screen. It is not a silent blank.
+    var currentPresenter: AssessmentPresenter? {
+        switch currentTest {
+        case .acuity:   BridgedAssessmentPresenter(wrapped: LandoltPresenter())
+        case .contrast: BridgedAssessmentPresenter(wrapped: ContrastHuntPresenter())
+        case .balance, .stereo, .none: nil
+        }
+    }
+
     /// How many answer buttons the current trial needs.
     ///
     /// Asks the EXERCISE rather than reading `staircase.alternatives`, because

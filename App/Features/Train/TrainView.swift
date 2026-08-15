@@ -22,6 +22,7 @@ struct TrainView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(SubscriptionManager.self) private var subscriptions
+    @Environment(SettingsStore.self) private var settings
     @Environment(\.theme) private var theme
 
     @State private var launching: ExerciseDescriptor?
@@ -244,6 +245,7 @@ struct TrainView: View {
             startError = "\(descriptor.title) isn't available in this build."
             return
         }
+        session.feedback = SessionFeedback(settings: settings)
         startError = nil
         runner = session
         launching = descriptor

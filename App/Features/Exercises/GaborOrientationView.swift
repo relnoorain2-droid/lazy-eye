@@ -34,27 +34,70 @@ struct GaborOrientationView: View {
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
-        ZStack {
-            Color.stimulusNeutral.ignoresSafeArea()
-
+        Group {
             switch runner.phase {
             case .ready:
                 readyState
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.surfaceBase.ignoresSafeArea())
+
             case .presenting, .feedback:
-                trialState
+                // THE STIMULUS FIELD IS NO LONGER THE WHOLE SCREEN.
+                //
+                // `Color.stimulusNeutral.ignoresSafeArea()` used to fill every
+                // pixel, which is what made this screen read as an unfinished
+                // grey slab. The grey is a measurement requirement for the area
+                // the Gabor occupies — it clips against anything darker — and it
+                // was never a requirement for the timer, the buttons or the
+                // margins. ExerciseStage draws the field as a defined surface
+                // and styles everything outside it.
+                ExerciseStage(
+                    title: GaborOrientationExercise.descriptor.title,
+                    secondsRemaining: runner.secondsRemaining,
+                    secondsTotal: runner.plannedSessionSeconds,
+                    onPause: { runner.pause() },
+                    onFatigue: { runner.reportFatigue() }
+                ) {
+                    stimulusLayer
+                } answers: {
+                    answerButtons
+                }
+
             case .onBreak(let remaining):
                 BreakCard(secondsRemaining: remaining)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.surfaceBase.ignoresSafeArea())
+
             case .paused:
                 pausedState
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.surfaceBase.ignoresSafeArea())
+
             case .finished(let reason):
                 SessionSummaryView(runner: runner, reason: reason) { onFinish(reason) }
             }
         }
-        .overlay(alignment: .top) { statusBar }
-        .overlay(alignment: .bottom) { controls }
         .statusBarHidden(runner.phase.acceptsResponses)
         .onChange(of: runner.currentTrial?.id) { _, _ in renderStimulus() }
         .onDisappear { runner.stop() }
+    }
+
+    /// The stimulus and its feedback mark. NOTHING here resizes the image: the
+    /// Gabor is rendered at the exact pixel size the calibration demands, and
+    /// `.interpolation(.none)` plus the absence of any frame is what keeps it
+    /// that way.
+    @ViewBuilder
+    private var stimulusLayer: some View {
+        ZStack {
+            if let stimulus, runner.phase.acceptsResponses {
+                Image(decorative: stimulus, scale: displayScale)
+                    .interpolation(.none)
+                    .accessibilityHidden(true)
+            }
+            if case .feedback(let correct) = runner.phase {
+                FeedbackMark(correct: correct)
+            }
+        }
     }
 
     // MARK: States
@@ -115,20 +158,11 @@ struct GaborOrientationView: View {
     private var answerButtons: some View {
         HStack(spacing: Spacing.md) {
             ForEach(GaborOrientationExercise.Answer.allCases, id: \.rawValue) { answer in
-                Button {
+                AnswerButton(title: answer.label,
+                             systemImage: answer.systemImage,
+                             isEnabled: runner.phase.acceptsResponses) {
                     runner.respond(answer: answer.rawValue)
-                } label: {
-                    VStack(spacing: Spacing.xs) {
-                        Image(systemName: answer.systemImage).font(.system(size: 26))
-                        Text(answer.label).font(TypeScale.callout().weight(.semibold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 88)
-                    .background(Color.surfaceRaised)
-                    .clipShape(RoundedRectangle(cornerRadius: Radius.button, style: .continuous))
                 }
-                .buttonStyle(PressableButtonStyle())
-                .disabled(!runner.phase.acceptsResponses)
                 .accessibilityLabel("Leaning \(answer.label.lowercased())")
             }
         }
