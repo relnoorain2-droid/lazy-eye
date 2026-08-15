@@ -123,6 +123,13 @@ struct HiddenHalfExercise: Exercise {
         GameDifficulty(contrastRatio: trial.payload.value("contrastRatio"))
     }
 
+    /// 4 to 12 items, so the answer indexes into the trial's own count rather
+    /// than the declared `alternatives` (which is 4 — the chance level on the
+    /// easiest trial, and deliberately not the same number).
+    func optionCount(for trial: Trial) -> Int {
+        Int(trial.payload.value("itemCount"))
+    }
+
     /// Places the items for a trial.
     ///
     /// Rejection sampling with a retry ceiling. If the ceiling is ever hit the

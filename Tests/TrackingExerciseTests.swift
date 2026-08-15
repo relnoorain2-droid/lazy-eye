@@ -299,8 +299,9 @@ struct TrackingExerciseTests {
                                config.resolvedHardestValue(for: iPhoneSE)] {
                 let trial = exercise.makeTrial(difficulty: difficulty, generator: &generator)
                 #expect(trial.correctAnswer >= 0)
-                #expect(trial.correctAnswer < config.alternatives,
-                        "\(descriptor.id): answer \(trial.correctAnswer) outside 0..<\(config.alternatives)")
+                let options = exercise.optionCount(for: trial)
+                #expect(trial.correctAnswer < options,
+                        "\(descriptor.id): answer \(trial.correctAnswer) outside 0..<\(options)")
                 #expect(trial.difficulty == difficulty)
             }
         }

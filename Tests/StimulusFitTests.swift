@@ -179,8 +179,16 @@ struct StimulusFitTests {
             for difficulty in [config.easiestValue,
                                config.resolvedHardestValue(for: Self.devices[0].calibration)] {
                 let trial = exercise.makeTrial(difficulty: difficulty, generator: &generator)
-                #expect(trial.correctAnswer >= 0 && trial.correctAnswer < config.alternatives,
-                        "\(descriptor.id): answer \(trial.correctAnswer) outside 0..<\(config.alternatives)")
+                // Against the TRIAL's option count, not the descriptor's
+                // `alternatives`. Those are different numbers on purpose for the
+                // three exercises whose option count grows with difficulty, and
+                // checking the wrong one is what let D9 ship a trial whose
+                // correct answer could not be displayed.
+                let options = exercise.optionCount(for: trial)
+                #expect(options >= config.alternatives,
+                        "\(descriptor.id): \(options) options is fewer than the declared chance level")
+                #expect(trial.correctAnswer >= 0 && trial.correctAnswer < options,
+                        "\(descriptor.id): answer \(trial.correctAnswer) outside 0..<\(options)")
                 #expect(trial.difficulty == difficulty)
             }
         }

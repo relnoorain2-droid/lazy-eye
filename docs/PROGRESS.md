@@ -42,3 +42,45 @@ Format: `YYYY-MM-DD · Phase N · what was done · what's next`
 - 2026-08-14 · Phase 9 · **The assessment battery** — the four-part check-in that produces every number on the Progress screen. **Its whole job is refusing to report numbers it did not earn**, and that is the half most easily left out: a staircase that ran out of trials still HAS a current value, and putting that on the chart would describe the app's opening guess rather than the user — then get compared against next month's. `reportableThreshold` returns nil below six reversals or half the trial budget, and every test in the new suite is about that refusal rather than about the happy path. **Three design points worth recording.** (1) The battery reuses the training exercises' stimulus generators and staircases rather than reimplementing them, because two implementations of "Landolt C acuity" would drift apart and the Progress screen would be comparing two different measurements while calling them one. What differs is the CONTRACT: a training session is allowed to be pleasant and end early, an assessment has a fixed budget and stated stopping rules. (2) Acuity runs twice, once per eye, because the single most useful number the battery produces is the GAP between them — a one-eye acuity score is a fine training number and useless as an outcome. (3) Stereo has a third state the others do not: **no measurable depth is recorded as its own flag, not as a very large number.** "600 arcmin" would sit on the chart looking like a measurement and would average into trends as if it were one. And critically, running out of evidence is NOT recorded as absent stereopsis — "we did not measure it" and "there is none" are different claims, and only one of them is about the user. Balance runs first because it is the free-tier test, the most defensible number the app produces, and the one most affected by fatigue; acuity runs last because it is the most robust. 17 new tests, 433 total. · **Next: the on-device coach and HealthKit, then Phases 11-13 for the store.**
 - 2026-08-14 · Phase 9 · **The check-in is now reachable** — `AssessmentRunner` drives the four sub-tests and `AssessmentView` presents them, wired to the Today card that until now described a feature that did not exist. **The runner is deliberately NOT `SessionRunner`,** and the reason is that their contracts are opposites: a training session exists to be pleasant and safe (breaks, fatigue button, ends early without penalty, threshold as a by-product), while an assessment exists to produce a number (fixed trial budget, stated stopping rules, refuses to report what it did not earn). Sharing one type would mean every future change to session comfort silently changing what the measurement means. **Three behaviours worth recording.** (1) Stopping ABANDONS rather than truncates. A half-finished battery is not a shorter battery, it is an unmeasured one — writing whatever the staircases had reached would put numbers on the chart indistinguishable from real ones a month later. The Stop button is always available, because someone whose eyes hurt must be able to leave. (2) A profile that cannot use the glasses is not offered the binocular sub-tests at all. Running them anyway would produce two numbers measured through no separation whatsoever, which is worse than two missing numbers because they would look like measurements. (3) A free-plan profile that also cannot use glasses has nothing to measure, and the runner says so rather than producing an empty result. Acuity runs twice, once per eye, because the GAP is the number that matters. 7 new tests, 440 total. · **Next: the on-device coach, then Phases 11-13 for the store.**
 - 2026-08-14 · Compliance pass before TestFlight · **The reference list is now reachable from inside the app.** It already carried author, year and journal for ten sources; what it lacked was any way to GET to them, which for a health-adjacent app under 1.4.1 is the difference between citing research and appearing to. Each source now links to a **PubMed search for its exact title** rather than a direct identifier — deliberately, because a mistyped identifier resolves to a different paper while still looking like a citation, and that is a worse failure than a slightly longer route to the right one. Two of the ten are there specifically because they cut against us: Holmes et al. (2016) found a binocular iPad game did NOT outperform patching, and Kelly et al. (2016) found an advantage at two weeks that is not a long-term one. A reference list containing only supportive findings is advertising. **Checked rather than assumed on the rest:** the privacy policy was already in-app and readable without any network (Profile → About), and the paywall already carried an in-app Privacy link, Apple's hosted standard EULA and a Manage Subscriptions link — so two of the four requests were already satisfied and did not need code. `website/privacy-policy.md` written for the public URL Apple requires, matching the in-app text word for word with contact and change-policy sections added. The in-app markdown renderer passes inline links through `AttributedString(markdown:)`, so the PubMed links are tappable without any renderer change. · **Next: TestFlight build for real-device testing.**
+
+## CI 51 — the first run that got far enough to find real bugs
+
+455 tests ran; 7 failed. Worth stating plainly: this is the first failure in this
+project that was not a compile error, which means the whole 32-exercise registry,
+the assessment battery and the paywall all built. Three distinct defects, none of
+them cosmetic:
+
+**1. A render limit was clamped to the wrong end of the range.**
+`resolvedHardestValue` decided which end a display limit bounded by reading the
+staircase's POLARITY. That is correct for every `lowerIsHarder` dimension and for
+spatial frequency, and wrong for an angular dimension where bigger is harder.
+D8 Brock Digital (bead depth, 8...120 arcmin, higher-is-harder) has a one-point
+floor of about 1.5 arcmin — a bound on the SMALLEST drawable disparity. Taking the
+minimum made its hardest setting 1.5, i.e. easier than its easiest. The range
+inverted and the 25 arcmin start value fell outside its own staircase. D2 Vergence
+Jump had the identical shape.
+
+The direction of a clamp belongs to the limit, not to the polarity, so `RenderLimit`
+now states whether its value is a floor or a ceiling and both ends are clamped
+against it. `resolvedEasiestValue` is the other half of the same rule.
+
+**2. `alternatives` was doing two jobs.**
+It is the chance level the staircase reasons about, deliberately fixed at the
+option count of the EASIEST trial. Three exercises then indexed their answer into
+the trial's ACTUAL count: D9 Dichoptic Search runs 4-12 items and declares 4, D3
+Split Match runs 3-6 and declares 3, G5 Star Tracer declares 3. So a hard search
+trial could carry `correctAnswer: 10` against a declared 4 — and any screen drawing
+`alternatives` buttons would not draw the correct answer at all. An unanswerable
+trial, scored as a failure, fed to the staircase as evidence about the user's
+vision. `Exercise.optionCount(for:)` is now the second number, and the assessment
+screen asks the exercise rather than the descriptor.
+
+**3. D1 Balanced Viewing declared 0.40 high-contrast area against a 0.35 cap.**
+FlickerGuard was right to reject it. The measured coverage is 14 elements of 1.2°
+over a 9x12° field, about 0.15, so the declaration is now 0.20. A safety
+declaration is a promise the renderer gets tested against — padding it is not free
+caution.
+
+All three were found by registry-wide tests that iterate every exercise rather than
+a fixed list, which is the only reason they surfaced at all: nothing generated a
+trial at the resolved bound until those tests did.

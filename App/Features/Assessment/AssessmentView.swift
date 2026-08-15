@@ -175,7 +175,7 @@ struct AssessmentView: View {
                 .foregroundStyle(Color.textSecondary)
 
             if let trial = runner.currentTrial {
-                let count = max(2, alternatives(for: runner.currentTest))
+                let count = runner.currentOptionCount
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())],
                           spacing: Spacing.sm) {
                     ForEach(0..<count, id: \.self) { answer in
@@ -187,13 +187,6 @@ struct AssessmentView: View {
                 .id(trial.id)
             }
         }
-    }
-
-    private func alternatives(for test: AssessmentTest?) -> Int {
-        guard let test,
-              let descriptor = ExerciseRegistry.descriptor(
-                for: AssessmentBattery.exerciseID(for: test)) else { return 2 }
-        return descriptor.staircase.alternatives
     }
 
     private func rest(_ runner: AssessmentRunner, nextIndex: Int) -> some View {

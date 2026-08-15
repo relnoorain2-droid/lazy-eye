@@ -143,10 +143,19 @@ struct StaircaseConfiguration: Hashable, Sendable {
     /// staircase can descend to a difficulty this screen cannot actually draw.
     func makeStaircase(ageGroup: AgeGroup = .thirteenPlus,
                        calibration: CalibrationProfile? = nil) -> Staircase {
-        Staircase(
-            start: startValue(for: ageGroup),
-            hardestValue: resolvedHardestValue(for: calibration),
-            easiestValue: easiestValue,
+        let hardest = resolvedHardestValue(for: calibration)
+        let easiest = resolvedEasiestValue(for: calibration)
+        // Clamp the start into the RESOLVED range, not the declared one. A
+        // descriptor whose start sits outside what this screen can draw is a bug
+        // the registry-wide tests catch, but a user mid-session should get a
+        // playable staircase rather than a start the renderer cannot honour.
+        let start = Swift.min(Swift.max(startValue(for: ageGroup),
+                                        Swift.min(hardest, easiest)),
+                              Swift.max(hardest, easiest))
+        return Staircase(
+            start: start,
+            hardestValue: hardest,
+            easiestValue: easiest,
             polarity: polarity,
             initialStepSize: initialStepSize,
             minimumStepSize: minimumStepSize
@@ -175,15 +184,46 @@ struct StaircaseConfiguration: Hashable, Sendable {
     ///
     /// So the floor is derived at runtime from the user's own calibration rather
     /// than hard-coded, and `isLimitedByDisplay(for:)` lets the UI say so.
+    ///
+    /// THE DIRECTION OF THE CLAMP BELONGS TO THE LIMIT, NOT TO THE POLARITY.
+    /// This method used to read `polarity == .lowerIsHarder ? max : min`, which
+    /// is a different claim: that a display limit always bounds whichever end
+    /// the exercise calls "hard". That holds for every `.lowerIsHarder`
+    /// dimension and for spatial frequency, and it is FALSE for an angular
+    /// dimension where bigger is harder.
+    ///
+    /// D8 Brock Digital measures bead depth in arcminutes, higher-is-harder,
+    /// 8...120. Its one-point floor resolves to about 1.5 arcmin — a bound on
+    /// the SMALLEST drawable disparity. Taking the minimum turned the hardest
+    /// setting into 1.5, i.e. easier than the easiest, collapsing the range and
+    /// putting the 25 arcmin start value outside its own staircase. D2 Vergence
+    /// Jump had the identical shape. Both shipped through eleven green CI runs
+    /// because nothing generated a trial at the resolved bound until the
+    /// registry-wide range test did.
+    ///
+    /// So each limit now states whether its value is a floor or a ceiling, and
+    /// both ends are clamped against it.
     func resolvedHardestValue(for calibration: CalibrationProfile?) -> Double {
-        guard let renderLimit else { return hardestValue }
-        guard let floor = renderLimit.hardestRenderableValue(for: calibration) else {
-            return hardestValue
+        clampToRenderable(hardestValue, for: calibration)
+    }
+
+    /// The easiest value this display can honestly present. Usually the declared
+    /// one — an easy trial is a big one — but an exercise whose easy end is
+    /// still sub-pixel on a small screen needs raising too.
+    func resolvedEasiestValue(for calibration: CalibrationProfile?) -> Double {
+        clampToRenderable(easiestValue, for: calibration)
+    }
+
+    private func clampToRenderable(_ value: Double,
+                                   for calibration: CalibrationProfile?) -> Double {
+        guard let renderLimit,
+              let bound = renderLimit.hardestRenderableValue(for: calibration) else {
+            return value
         }
-        // "Hardest" is whichever is EASIER of the two, in this polarity's terms.
-        return polarity == .lowerIsHarder
-            ? Swift.max(hardestValue, floor)
-            : Swift.min(hardestValue, floor)
+        return switch renderLimit.bound {
+        case .minimum: Swift.max(value, bound)
+        case .maximum: Swift.min(value, bound)
+        }
     }
 
     /// True when the screen, not the exercise design, sets the ceiling on
@@ -250,6 +290,23 @@ enum RenderLimit: Hashable, Sendable {
 
     /// Spatial frequency in cycles per degree, bounded by Nyquist.
     case cyclesPerDegree(pointsPerCycle: Double)
+
+    /// Which end of the dimension this limit bounds.
+    ///
+    /// Every angular and contrast limit answers "how small can a feature be
+    /// before the screen stops drawing it", so it is a MINIMUM on the value.
+    /// Spatial frequency is the odd one out: Nyquist says how FINE a grating can
+    /// be, and a finer grating is a larger number, so it is a MAXIMUM.
+    ///
+    /// Getting this from the polarity instead was the D8/D2 range collapse.
+    enum Bound { case minimum, maximum }
+
+    var bound: Bound {
+        switch self {
+        case .cyclesPerDegree: .maximum
+        case .arcminutes, .arcseconds, .logMAR, .contrast: .minimum
+        }
+    }
 
     /// The hardest value this calibration can honestly render, or nil if the
     /// limit does not apply (no calibration, or a dimension with no display
@@ -381,8 +438,29 @@ protocol Exercise: Sendable {
     /// whole app runs on `SeededGenerator` precisely so that any session can be
     /// replayed exactly from its seed when someone reports a bad trial.
     func makeTrial(difficulty: Double, generator: inout SeededGenerator) -> Trial
+
+    /// How many answers THIS trial offers.
+    ///
+    /// WHY THIS IS NOT `staircase.alternatives`.
+    /// `alternatives` is the chance level the staircase reasons about, and for
+    /// exercises whose option count grows with difficulty it is deliberately the
+    /// count on the EASIEST trial — the best a guesser ever does. Three
+    /// exercises then indexed their answer into the trial's ACTUAL count:
+    /// D9 Dichoptic Search runs 4 to 12 items and declares 4, D3 Split Match
+    /// runs 3 to 6 and declares 3, G5 Star Tracer declares 3. So a hard search
+    /// trial could carry `correctAnswer: 10` against a declared 4, and any
+    /// screen that drew `alternatives` buttons would not draw the right answer
+    /// at all — an unanswerable trial that scores as wrong.
+    ///
+    /// Two honest numbers instead of one overloaded one.
+    func optionCount(for trial: Trial) -> Int
 }
 
 extension Exercise {
     var descriptor: ExerciseDescriptor { Self.descriptor }
+
+    /// Fixed-choice exercises — most of them — have one count for every trial.
+    func optionCount(for trial: Trial) -> Int {
+        Self.descriptor.staircase.alternatives
+    }
 }

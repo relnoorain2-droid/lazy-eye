@@ -63,7 +63,16 @@ struct BalancedViewingExercise: Exercise {
             maxTemporalRateHz: 0,
             invertsFullFieldLuminance: false,
             maxContrast: AnaglyphCompositor.maximumContrast,
-            maxHighContrastAreaFraction: 0.40
+            // 0.20, and the first draft said 0.40 — above FlickerGuard's 0.35
+            // photosensitivity cap, which is why the audit rejected it.
+            //
+            // The declaration should be measured, not guessed. 14 elements of
+            // 1.2 deg across a 9x12 deg field is 14 * pi * 0.6^2 = 15.8 deg^2
+            // out of 108, so 0.15 with the check-in symbol on top. 0.20 leaves
+            // headroom without claiming coverage the scene never reaches: a
+            // declaration is a promise the renderer is tested against, so
+            // padding it is not free caution.
+            maxHighContrastAreaFraction: 0.20
         ),
         isFreeTier: false,
         minimumAgeGroup: .underFive
@@ -198,6 +207,13 @@ struct StarTracerExercise: Exercise {
 
     func difficulty(for trial: Trial) -> GameDifficulty {
         GameDifficulty(contrastRatio: trial.payload.value("contrastRatio"))
+    }
+
+    /// The star indices PLUS the completion value, which is why this is
+    /// `count + 1` rather than `count`. The answer space here is 0..<count for
+    /// the individual stars and `count` itself for "finished the sequence".
+    func optionCount(for trial: Trial) -> Int {
+        Int(trial.payload.value("starCount")) + 1
     }
 
     /// Star positions, in tap order.

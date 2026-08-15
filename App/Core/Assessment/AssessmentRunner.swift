@@ -104,6 +104,18 @@ final class AssessmentRunner {
         }
     }
 
+    /// How many answer buttons the current trial needs.
+    ///
+    /// Asks the EXERCISE rather than reading `staircase.alternatives`, because
+    /// those two numbers differ for the exercises whose option count grows with
+    /// difficulty. None of the four sub-tests borrows one of those today, and
+    /// hard-coding that assumption into the screen is how it would break the
+    /// first time the battery borrowed a different exercise.
+    var currentOptionCount: Int {
+        guard let exercise, let currentTrial else { return 2 }
+        return Swift.max(2, exercise.optionCount(for: currentTrial))
+    }
+
     var currentTest: AssessmentTest? {
         guard case .running(let index) = phase, index < plan.count else { return nil }
         return plan[index]

@@ -109,6 +109,11 @@ struct SplitMatchExercise: Exercise {
         GameDifficulty(contrastRatio: trial.payload.value("contrastRatio"))
     }
 
+    /// 3 to 6 cards. `alternatives` stays at 3 for the chance level.
+    func optionCount(for trial: Trial) -> Int {
+        Int(trial.payload.value("optionCount"))
+    }
+
     func target(for trial: Trial) -> Card {
         Card(leftHalf: Int(trial.payload.value("targetLeft")),
              rightHalf: Int(trial.payload.value("targetRight")))

@@ -1280,4 +1280,55 @@ struct ViewingAndTracerTests {
         #expect(ExerciseRegistry.available(track: .dichoptic).count == 10)
         #expect(ExerciseRegistry.available(track: .game).count == 8)
     }
+
+    // MARK: Option count vs chance level
+
+    @Test("the three growing exercises report more options than their chance level")
+    func growingExercisesReportTheirRealOptionCount() {
+        // `alternatives` is the guess rate and is fixed at the EASIEST trial's
+        // count on purpose. `optionCount(for:)` is how many answers this trial
+        // actually offers. Conflating them meant D9 could produce a trial whose
+        // correct answer was index 10 while every consumer believed there were
+        // four — a trial no user could answer correctly, scored as a failure and
+        // fed to the staircase as evidence about their vision.
+        var generator = SeededGenerator(seed: 90_210)
+
+        let search = HiddenHalfExercise()
+        let hardSearch = search.makeTrial(
+            difficulty: HiddenHalfExercise.descriptor.staircase.hardestValue,
+            generator: &generator)
+        #expect(search.optionCount(for: hardSearch) > 4,
+                "a hard search trial should carry more than the declared four")
+        #expect(hardSearch.correctAnswer < search.optionCount(for: hardSearch))
+
+        let match = SplitMatchExercise()
+        let hardMatch = match.makeTrial(
+            difficulty: SplitMatchExercise.descriptor.staircase.hardestValue,
+            generator: &generator)
+        #expect(match.optionCount(for: hardMatch) > 3)
+        #expect(hardMatch.correctAnswer < match.optionCount(for: hardMatch))
+
+        // G5's answer space is the star indices PLUS the completion value, so
+        // its option count is one MORE than the number of stars. Off by one here
+        // and completing the hardest trial scores as wrong.
+        let tracer = StarTracerExercise()
+        let hardTrace = tracer.makeTrial(
+            difficulty: StarTracerExercise.descriptor.staircase.hardestValue,
+            generator: &generator)
+        #expect(hardTrace.correctAnswer < tracer.optionCount(for: hardTrace),
+                "completing the sequence must be a reportable answer")
+    }
+
+    @Test("fixed-choice exercises fall back to their declared alternatives")
+    func fixedExercisesUseTheDefault() {
+        // Guards against the default implementation being shadowed by an
+        // override somewhere it does not belong: if every exercise started
+        // reporting its own count, the chance level would silently follow
+        // difficulty and the staircase would target the wrong percentage.
+        var generator = SeededGenerator(seed: 5)
+        let stereo = DepthPopExercise()
+        let trial = stereo.makeTrial(difficulty: 20, generator: &generator)
+        #expect(stereo.optionCount(for: trial)
+                == DepthPopExercise.descriptor.staircase.alternatives)
+    }
 }

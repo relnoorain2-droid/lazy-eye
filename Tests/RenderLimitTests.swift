@@ -123,6 +123,68 @@ struct RenderLimitTests {
                 "drove the staircase to its floor and it landed at \(s.value), below the renderable \(resolved)")
     }
 
+    @Test("An angular floor bounds the SMALL end even when small means easy")
+    func angularFloorDoesNotCollapseAHigherIsHarderRange() {
+        // D8 Brock Digital's exact shape, and the bug it shipped with: bead
+        // depth in arcminutes where MORE disparity is harder. The floor says
+        // "no feature below about 1.5 arcmin", which constrains the easy end.
+        // Reading the direction off the polarity instead took the minimum of
+        // 120 and 1.5, so the hardest setting became easier than the easiest,
+        // the range collapsed, and the 25 arcmin start fell outside it.
+        let config = StaircaseConfiguration(
+            dimensionName: "bead depth", unit: " arcmin",
+            startValue: 25, hardestValue: 120, easiestValue: 8,
+            polarity: .higherIsHarder, alternatives: 2,
+            renderLimit: .arcminutes(minimumFeaturePoints: 1.0)
+        )
+
+        for (name, profile) in [("iPhone 14 Pro", iPhone14Pro),
+                                ("iPhone SE", iPhoneSE),
+                                ("iPad Pro 13", iPadPro13)] {
+            let hardest = config.resolvedHardestValue(for: profile)
+            let easiest = config.resolvedEasiestValue(for: profile)
+            #expect(hardest == 120,
+                    "\(name): 120 arcmin is easily drawable and became \(hardest)")
+            #expect(easiest == 8, "\(name): 8 arcmin is above the floor")
+            #expect(hardest > easiest, "\(name): the range inverted")
+            #expect(config.startValue(for: .thirteenPlus) > easiest)
+            #expect(config.startValue(for: .thirteenPlus) < hardest)
+        }
+    }
+
+    @Test("An easy end below the floor IS raised")
+    func angularFloorRaisesAnUndrawableEasyEnd() {
+        // The other half of the same rule, and the reason it has to be a clamp
+        // on both ends rather than a special case: an exercise whose EASIEST
+        // trial is sub-pixel is just as unmeasurable as a hardest one.
+        let config = StaircaseConfiguration(
+            dimensionName: "depth", unit: " arcmin",
+            startValue: 0.6, hardestValue: 2.0, easiestValue: 0.2,
+            polarity: .higherIsHarder, alternatives: 2,
+            renderLimit: .arcminutes(minimumFeaturePoints: 1.0)
+        )
+        let easiest = config.resolvedEasiestValue(for: iPhoneSE)
+        #expect(easiest > 0.2, "0.2 arcmin is under a point and must be raised")
+        #expect(config.resolvedHardestValue(for: iPhoneSE) == 2.0)
+    }
+
+    @Test("Nyquist still bounds the LARGE end for spatial frequency")
+    func nyquistBoundsTheHighEnd() {
+        // The one limit whose value is a ceiling rather than a floor. If the
+        // fix above had been written as "higher-is-harder means never clamp",
+        // this would have started drawing gratings past Nyquist — aliasing
+        // measured as vision.
+        let config = StaircaseConfiguration(
+            dimensionName: "spatial frequency", unit: " cpd",
+            startValue: 2, hardestValue: 60, easiestValue: 1,
+            polarity: .higherIsHarder, alternatives: 2,
+            renderLimit: .cyclesPerDegree(pointsPerCycle: 2)
+        )
+        #expect(config.resolvedHardestValue(for: iPhoneSE) < 60)
+        #expect(config.resolvedEasiestValue(for: iPhoneSE) == 1,
+                "1 cpd is nowhere near the ceiling and must not move")
+    }
+
     @Test("An achievable bound is left alone")
     func achievableBoundUntouched() {
         let config = StaircaseConfiguration(
