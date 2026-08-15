@@ -51,9 +51,23 @@ final class SmokeUITests: XCTestCase {
 
         let deadline = Date().addingTimeInterval(30)
         var found = false
+        var died = false
         while Date() < deadline && !found {
+            // CHECK THE APP IS STILL ALIVE ON EVERY PASS.
+            //
+            // Without this the loop cheerfully polls a dead process for thirty
+            // seconds and then reports "element not found", which sent three
+            // CI runs chasing a layout problem that was really a termination.
+            // "The thing I am looking at stopped existing" and "the thing I am
+            // looking for is not there" deserve different messages.
+            if app.state != .runningForeground { died = true; break }
             found = candidates.contains { $0.exists }
             if !found { _ = candidates[0].waitForExistence(timeout: 2) }
+        }
+
+        if died {
+            XCTFail("The app terminated during launch. State: \(app.state.rawValue)")
+            return
         }
 
         if !found {
@@ -77,6 +91,10 @@ final class SmokeUITests: XCTestCase {
     /// than an optional so the failure message is never empty.
     @MainActor
     private func rootState(of app: XCUIApplication) -> String {
+        // Querying a dead app throws its own error and buries the real one.
+        guard app.state == .runningForeground else {
+            return "app is not running (state \(app.state.rawValue))"
+        }
         let matches = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH 'root:'"))
         guard matches.count > 0 else {

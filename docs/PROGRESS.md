@@ -235,3 +235,29 @@ Worth recording: the seeder's unit tests pass and always did. They build their
 own `ModelContext` and read back from it, which proves the seeding logic and
 proves nothing about `mainContext` plus `@Query` observation in the running app.
 A test can be completely correct and still not cover the thing that breaks.
+
+## CI 56 — it was never "element not found"
+
+The diagnostic added last run paid for itself immediately, by failing:
+
+    testAppLaunchesAndShowsNavigation, Failed to get matching snapshots:
+    Application com.amblyo.app is not running
+
+The app TERMINATES on every seeded launch. It has been doing so the whole time.
+"Lost connection to the application" two runs ago was the same event; the runs
+before that polled a dead process for thirty seconds and then reported "could
+not find a 'Today' element", which is true, useless, and sent three rounds of
+work at a layout problem that did not exist.
+
+Reverting the `init()` seeding therefore fixed nothing — it moved the crash back
+one step. What crashes is the seeding itself, wherever it runs, and the constant
+across every failure is `modelContainer.mainContext`: the context `@Query` is
+actively observing while the seeder writes twelve weeks of sessions and trials
+in a single pass. Seeding now uses its own `ModelContext`, which is exactly what
+`DemoDataSeederTests` has always done — and is why those tests passed
+throughout while the app died.
+
+The smoke test also checks the app is still alive on every pass of its wait loop
+now. "The thing I am looking at stopped existing" and "the thing I am looking
+for is not there" are different failures and were reported identically, which is
+the whole reason this took five runs instead of one.

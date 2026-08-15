@@ -105,7 +105,25 @@ struct AmblyoApp: App {
                 .task { AudioEngine.configureSession() }
                 .task {
                     guard LaunchArguments.shouldSeedDemoData else { return }
-                    DemoDataSeeder.seed(into: modelContainer.mainContext)
+                    // ITS OWN CONTEXT, NOT `mainContext`.
+                    //
+                    // Seeding against `mainContext` terminated the app. Every
+                    // seeded launch died — first reported as "Lost connection
+                    // to the application", then as the diagnostic itself
+                    // failing with "Application com.amblyo.app is not running"
+                    // — while the launch WITHOUT the seed argument was fine.
+                    //
+                    // The seeder writes twelve weeks of sessions and trials in
+                    // one pass, and `mainContext` is the context `@Query` is
+                    // actively observing while that happens. Its own tests
+                    // never did this: they build a separate `ModelContext` and
+                    // read back from it, which is why they passed throughout.
+                    // The app now does what the tested path does.
+                    //
+                    // Writes still land in the same store, so `@Query` picks
+                    // them up on the next update — which is the whole point.
+                    let seedContext = ModelContext(modelContainer)
+                    DemoDataSeeder.seed(into: seedContext)
                 }
                 .task {
                     await subscriptions.start()
