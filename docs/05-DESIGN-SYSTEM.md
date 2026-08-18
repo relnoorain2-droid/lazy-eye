@@ -141,14 +141,29 @@ This is the difference between "an iPhone app that runs on iPad" and an iPad app
 
 The reference app's single worst-reviewed feature (`14` R1, R2). Non-negotiable rules:
 
-1. **Every audio channel defaults to OFF on first install.** Music, sound effects, and voice guidance
-   are three independent toggles.
+1. **Feedback sound defaults ON; music and voice guidance default OFF.** Three independent toggles.
+
+   **This rule was reversed after the first device test, and the reason is worth keeping.** It
+   originally read "every audio channel defaults to OFF on first install", reasoning from the
+   reference app's worst reviews — an app that makes noise unasked. That reasoning is right about
+   *music*, and wrong about *feedback*, and the distinction was not drawn.
+
+   What the original rule missed is rule 4 below. Because the category is `.ambient`, the hardware
+   silent switch already silences this app and the user's own audio already keeps playing. The harm
+   being defended against cannot occur. What did occur is that the app shipped where answering a
+   question produced nothing at all — which does not read as restraint, it reads as broken.
+
+   A tone confirming a tap is feedback. Music is a preference. Only the second one is furniture.
 2. A **master mute** appears in the session nav bar at all times, one tap, no confirmation.
 3. The setting applies **immediately**, mid-sound. No restart, no "will take effect next session".
 4. `AVAudioSession` category `.ambient` with `mixWithOthers` — the hardware silent switch silences the
    app, and the user's own music keeps playing. (Users training for 20 minutes want their own audio.)
-5. First launch shows a single card: *"Sounds are off. Turn them on?"* with Yes / No. The user is
-   never made to hunt for the setting.
+5. Onboarding shows the three channels as a single card, so the setting is chosen rather than hunted
+   for. **The draft's defaults must equal `SettingsStore`'s**, because onboarding writes the draft
+   over the store on commit — a mismatch silently reverts the store's default for every new user at
+   the end of setup, and the store's own tests stay green because they never run onboarding. This
+   happened. `OnboardingDraftTests.audioDefaultsMatchTheStore` now compares the two rather than
+   hard-coding either.
 6. Haptics are a separate toggle, also default off for under-13 profiles.
 7. **No audio at all is required for any exercise to function.** `g.rhythmTap` ships a visual-only
    mode as its default.

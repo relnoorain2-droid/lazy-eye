@@ -459,3 +459,36 @@ Check-in now renders real stimuli for acuity and contrast by bridging their
 training presenters. Balance and stereo draw ANIMATED anaglyph canvases frame by
 frame rather than producing an image, so they cannot borrow a still renderer;
 the screen now says so instead of showing a blank panel, and task #51 tracks it.
+
+## The sound default reversal, and the hole the old tests found
+
+One failure: `SettingsStoreTests.audioDefaultsAreOff`, asserting the behaviour I
+had just deliberately changed. Everything compiled; 476 tests, 475 passing.
+
+That test was doing its job. The right response to a test failing because a
+decision was reversed is to rewrite the test WITH the reasoning, not to delete
+it — so it now records both the old argument and why it was wrong, and the
+design doc's rule 1 was rewritten rather than quietly contradicted.
+
+**And it exposed a real defect in my change.** `OnboardingDraft.soundEffectsEnabled`
+was still `false`, and `OnboardingFlow.persist()` copies the draft over the
+settings store on commit. So the new default would have been silently reverted
+for every new user at the moment they finished setup — while `SettingsStoreTests`
+stayed green, because it never runs onboarding. The app would have been silent
+again and the Settings screen would have shown a toggle the user never touched
+sitting off.
+
+`OnboardingDraftTests.audioDefaultsMatchTheStore` now COMPARES the two rather
+than hard-coding either, so the next person to change one is told about the
+other.
+
+Two pieces of copy also had to move with it: the first-launch card announced
+"Sound is off — turn it on?" and the onboarding step was headed "Everything is
+off", both directly above a toggle that was now on. Copy that contradicts the
+control beneath it is worse than either state alone, because the user cannot
+tell whether the app is lying or broken.
+
+The general shape, since it is the third time this project has produced it: a
+default is never in one place. It was in the store, the draft, two screens of
+copy and a design rule, and changing one of five is indistinguishable from
+changing none.

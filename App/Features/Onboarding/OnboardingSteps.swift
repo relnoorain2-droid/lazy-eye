@@ -253,14 +253,19 @@ struct SoundStepView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.lg) {
-            Text("Everything is off")
+            Text("You choose the sound")
                 .font(TypeScale.title(rounded: theme.usesRoundedFont))
 
+            // Rewritten when feedback sound started defaulting on. The heading
+            // said "Everything is off" while the toggle below it was on, which
+            // is worse than either state on its own: a user cannot tell whether
+            // the app is lying or broken.
             Text("""
                  The most common complaint about apps like this one is sound you \
-                 can't switch off. Here all three channels start off, they're \
-                 separate, and nothing needs sound to work. Turn on only what you \
-                 want.
+                 can't switch off. So these are three separate switches, your \
+                 phone's silent switch always wins, and nothing here needs sound \
+                 to work. A quiet tick when you answer is on to start with; \
+                 music and the spoken guide are not.
                  """)
                 .font(TypeScale.body(rounded: theme.usesRoundedFont))
                 .foregroundStyle(Color.textSecondary)

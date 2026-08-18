@@ -24,13 +24,44 @@ struct SettingsStoreTests {
         return d
     }
 
-    @Test("Every audio channel is off on a fresh install")
-    func audioDefaultsAreOff() {
+    @Test("Feedback sounds are on by default; music and voice are not")
+    func audioDefaultsAreDeliberate() {
+        // THIS TEST USED TO ASSERT THE OPPOSITE, AND IT WAS RIGHT TO.
+        //
+        // It was `audioDefaultsAreOff`, pinning a decision that every channel
+        // starts silent so the app never makes noise unasked. That reasoning was
+        // sound and the conclusion was wrong, which the first device test made
+        // obvious: answering a question produced no sound at all, and an app
+        // that does not respond to a tap does not read as restrained. It reads
+        // as broken.
+        //
+        // What the original argument missed is that the audio session is
+        // `.ambient`. The hardware silent switch already silences this app and
+        // the user's own music already keeps playing, so the harm the default
+        // was protecting against cannot occur.
+        //
+        // The line kept from the old decision: music and spoken guidance are
+        // PREFERENCES and stay off. A short tone confirming a tap is FEEDBACK,
+        // and feedback is not optional furniture.
         let settings = SettingsStore(defaults: freshDefaults())
 
+        #expect(settings.soundEffectsEnabled, "answering a trial must be audible")
+        #expect(settings.isAudioAudible)
         #expect(settings.musicEnabled == false)
-        #expect(settings.soundEffectsEnabled == false)
         #expect(settings.voiceGuidanceEnabled == false)
+        #expect(settings.masterMuted == false)
+    }
+
+    @Test("Muting everything really does silence the app")
+    func mutingEveryChannelIsSilent() {
+        // The old default made this state the starting point, so nothing ever
+        // checked it explicitly. It is now something a user has to choose, which
+        // makes it worth a test of its own.
+        let settings = SettingsStore(defaults: freshDefaults())
+        settings.soundEffectsEnabled = false
+        settings.musicEnabled = false
+        settings.voiceGuidanceEnabled = false
+
         #expect(settings.isAudioAudible == false)
     }
 

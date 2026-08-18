@@ -105,8 +105,17 @@ struct SessionControlCapsule: View {
 
 // MARK: - First-launch sound card
 //
-// Sounds are off. Rather than making the user hunt for the setting — the exact
-// complaint on the reference app — we show this once and let them choose.
+// THIS CARD NOW OFFERS THE OPPOSITE CHOICE, AND HAD TO.
+//
+// It used to say "Sound is off — turn it on?", which was correct while every
+// channel defaulted to silent. Feedback sound now defaults ON, so a card
+// announcing the app is silent would have been describing a state that no
+// longer existed — the single most confusing kind of copy, because the user has
+// no way to tell whether the app is wrong or their ears are.
+//
+// The purpose survives the reversal: the reference app's specific complaint was
+// people hunting for a sound setting, so this is still shown once, up front, and
+// still lets one tap settle it either way.
 
 struct SoundChoiceCard: View {
     @Environment(SettingsStore.self) private var settings
@@ -116,23 +125,24 @@ struct SoundChoiceCard: View {
     var body: some View {
         AmblyoCard(accent: .brandPrimary) {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                Label("Sound is off", systemImage: "speaker.slash")
+                Label("Sound is on", systemImage: "speaker.wave.2")
                     .font(TypeScale.headline(rounded: theme.usesRoundedFont))
 
-                Text("Amblyo is silent unless you turn sound on. "
-                   + "You can change this any time, and there's a mute button on every exercise.")
+                Text("A short tone and a tap confirm each answer. Your phone's silent switch "
+                   + "still silences everything, and there's a mute button on every exercise.")
                     .font(TypeScale.callout(rounded: theme.usesRoundedFont))
                     .foregroundStyle(Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: Spacing.sm) {
-                    AmblyoButton(title: "Keep it silent", style: .secondary) {
+                    AmblyoButton(title: "Silence it", style: .secondary) {
+                        settings.soundEffectsEnabled = false
+                        settings.musicEnabled = false
                         settings.hasSeenSoundChoice = true
                         onComplete()
                     }
-                    AmblyoButton(title: "Turn sound on") {
+                    AmblyoButton(title: "Keep sound on") {
                         settings.soundEffectsEnabled = true
-                        settings.musicEnabled = true
                         settings.hasSeenSoundChoice = true
                         onComplete()
                     }

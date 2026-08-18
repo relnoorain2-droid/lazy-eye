@@ -41,7 +41,13 @@ struct OnboardingDraft: Equatable, Sendable {
     // MARK: Sound
 
     var musicEnabled: Bool = false
-    var soundEffectsEnabled: Bool = false
+    // MUST MATCH `SettingsStore`'s default, and this is not cosmetic.
+    // `OnboardingFlow.persist()` copies this draft over the settings store on
+    // commit, so a mismatch here would silently undo the store's default the
+    // moment a user finished setup — every new user, every time, with the
+    // Settings screen then showing the toggle they never touched as off. The
+    // store's own tests would still pass, because they never run onboarding.
+    var soundEffectsEnabled: Bool = true
     var voiceGuidanceEnabled: Bool = false
 
     // MARK: Calibration

@@ -114,12 +114,43 @@ struct OnboardingDraftTests {
     //
     // The single most important default in the app. docs/05-DESIGN-SYSTEM.md §7.
 
-    @Test("Every audio channel starts off in a fresh draft")
-    func audioStartsSilent() {
+    /// An isolated suite per call, so nothing leaks between tests.
+    private func freshDefaults() -> UserDefaults {
+        let name = "amblyo.draft.tests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        return defaults
+    }
+
+    // `SettingsStore` is @MainActor, so a test that constructs one must be too.
+    @MainActor
+    @Test("The draft's audio defaults match the settings store's, exactly")
+    func audioDefaultsMatchTheStore() {
+        // WHY THIS IS COMPARED RATHER THAN HARD-CODED.
+        //
+        // `OnboardingFlow.persist()` copies the draft over the settings store on
+        // commit. So these two sets of defaults are not merely similar, they are
+        // the same decision written twice — and when sound effects were turned
+        // on in the store, this draft still said off, which would have silently
+        // reverted the change for every new user at the end of setup. The store
+        // tests would have stayed green throughout, because they never run
+        // onboarding.
+        //
+        // Comparing them means the next person to change one is told about the
+        // other, instead of finding out from a device weeks later.
         let draft = OnboardingDraft()
-        #expect(draft.musicEnabled == false)
-        #expect(draft.soundEffectsEnabled == false)
-        #expect(draft.voiceGuidanceEnabled == false)
+        let store = SettingsStore(defaults: freshDefaults())
+
+        #expect(draft.musicEnabled == store.musicEnabled)
+        #expect(draft.soundEffectsEnabled == store.soundEffectsEnabled)
+        #expect(draft.voiceGuidanceEnabled == store.voiceGuidanceEnabled)
+    }
+
+    @Test("Feedback sound is on by default, so a first session is not silent")
+    func feedbackSoundStartsOn() {
+        #expect(OnboardingDraft().soundEffectsEnabled)
+        #expect(OnboardingDraft().musicEnabled == false)
+        #expect(OnboardingDraft().voiceGuidanceEnabled == false)
     }
 
     // MARK: Card-check geometry
