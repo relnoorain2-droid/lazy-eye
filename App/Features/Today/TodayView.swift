@@ -93,7 +93,7 @@ struct TodayView: View {
                     SafetyBanner(level: .caution, title: "Couldn't start", message: startError)
                 }
 
-                greeting(profile)
+                hero(profile)
 
                 if !profile.isSetUp {
                     setupCard(profile)
@@ -122,19 +122,132 @@ struct TodayView: View {
             }
             .padding()
             .readableContentWidth()
+            // Clears the floating tab bar. On iOS 26 the tab bar hovers over
+            // the scroll view rather than sitting below it, so the last card
+            // ends up half-hidden behind it — visible in the first device
+            // screenshots. The safe area does not cover this because the bar is
+            // an overlay, not a bottom inset.
+            .padding(.bottom, 72)
         }
         .screenBackground()
     }
 
-    private func greeting(_ profile: Profile) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(Self.greetingWord(at: .now))
-                .font(TypeScale.caption(rounded: theme.usesRoundedFont))
-                .foregroundStyle(Color.textSecondary)
-            Text(profile.name)
-                .font(TypeScale.displayLarge(rounded: theme.usesRoundedFont))
+    /// The header, rebuilt after the first device test called this screen "like
+    /// a Word document".
+    ///
+    /// It was: a small grey word, a name in large type, then a column of white
+    /// cards containing sentences. Every element the same weight, no colour, no
+    /// focal point — accurate information arranged as a memo. A person opening
+    /// a training app wants to know two things in the first second, and neither
+    /// of them is a paragraph: **am I on track**, and **what do I press**.
+    ///
+    /// So the header now carries a ring for today's minutes and a streak, on a
+    /// brand-tinted panel that anchors the screen. Not decoration for its own
+    /// sake — a ring answers "how much is left today" faster than "12 min" in
+    /// body text, which is the entire reason rings are on watches.
+    private func hero(_ profile: Profile) -> some View {
+        // The target is the profile's PLANNED session length, not the daily cap
+        // and not what the cap will still allow. The cap is a safety ceiling —
+        // ringing it as a goal would tell the user to aim at the maximum amount
+        // of screen time the app permits, which is the opposite of its purpose.
+        // And using the remaining allowance would shrink the target as the day
+        // went on, so the ring could go backwards while the user did nothing.
+        let target = max(60, profile.plannedSessionSeconds)
+        let done = min(secondsUsedToday, target)
+
+        return ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: Radius.card + 6, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.brandPrimary.opacity(0.20),
+                                 Color.brandSecondary.opacity(0.12)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing)
+                )
+
+            HStack(spacing: Spacing.lg) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(Self.greetingWord(at: .now))
+                        .font(TypeScale.caption(rounded: theme.usesRoundedFont))
+                        .foregroundStyle(Color.textSecondary)
+                    Text(profile.name)
+                        .font(TypeScale.displayLarge(rounded: theme.usesRoundedFont))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+
+                    if streak > 0 {
+                        Label("\(streak) day\(streak == 1 ? "" : "s") in a row",
+                              systemImage: "flame.fill")
+                            .font(TypeScale.caption(rounded: theme.usesRoundedFont).weight(.semibold))
+                            .foregroundStyle(Color.brandPrimary)
+                            .padding(.top, Spacing.xs)
+                    } else {
+                        // No streak yet is not a failure and is not shown as an
+                        // empty flame or a zero. A zero on a counter reads as
+                        // losing at something you have not started.
+                        Text("Today is a good day to start")
+                            .font(TypeScale.caption(rounded: theme.usesRoundedFont))
+                            .foregroundStyle(Color.textSecondary)
+                            .padding(.top, Spacing.xs)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                TodayRing(done: done, target: target)
+            }
+            .padding(Spacing.lg)
         }
         .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(Self.greetingWord(at: .now)) \(profile.name). \(done / 60) of \(target / 60) minutes done today.")
+    }
+
+    /// Today's minutes, as a ring.
+    ///
+    /// Fills, and then STOPS at full. It does not keep going, turn gold, or
+    /// invite a second session — the daily cap exists because more screen time
+    /// is not more benefit for amblyopia training, and a ring that rewarded
+    /// overshooting would be arguing with the cap the app enforces two lines
+    /// away.
+    struct TodayRing: View {
+        let done: Int
+        let target: Int
+
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        private var fraction: Double {
+            guard target > 0 else { return 0 }
+            return min(1, Double(done) / Double(target))
+        }
+
+        var body: some View {
+            ZStack {
+                Circle()
+                    .stroke(Color.surfaceRaised, lineWidth: 9)
+                Circle()
+                    .trim(from: 0, to: fraction)
+                    .stroke(fraction >= 1 ? Color.success : Color.brandPrimary,
+                            style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(reduceMotion ? nil : Motion.gentle, value: fraction)
+
+                if fraction >= 1 {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(Color.success)
+                } else {
+                    VStack(spacing: 0) {
+                        Text("\(done / 60)")
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                        Text("of \(target / 60) min")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(Color.textSecondary)
+                    }
+                }
+            }
+            .frame(width: 92, height: 92)
+            .accessibilityHidden(true)
+        }
     }
 
     /// Time-of-day greeting. Static and testable rather than inline, because

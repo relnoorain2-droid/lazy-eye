@@ -29,6 +29,19 @@ struct ProgressDashboardView: View {
     @State private var series: [String: [(day: Date, value: Double)]] = [:]
     @State private var loadError: String?
 
+    /// The last few sessions, newest first.
+    ///
+    /// WHY THIS EXISTS SEPARATELY FROM THE TRENDS.
+    /// Everything else on this screen is inferential and refuses to speak early
+    /// — a trend needs eight practice days before it will claim a direction,
+    /// which is correct and which means that after a user's FIRST session this
+    /// screen said, in effect, nothing at all. Refusing to over-claim is not the
+    /// same as refusing to acknowledge, and a person who has just finished five
+    /// minutes of work is owed a record that it happened.
+    ///
+    /// This list makes no claim about vision. It reports what was done.
+    @State private var recent: [SessionRecord] = []
+
     private var profile: Profile? { activeProfiles.first }
 
     var body: some View {
@@ -56,6 +69,12 @@ struct ProgressDashboardView: View {
             }
             .padding()
             .readableContentWidth()
+            // Clears the floating tab bar. On iOS 26 the tab bar hovers over
+            // the scroll view rather than sitting below it, so the last card
+            // ends up half-hidden behind it — visible in the first device
+            // screenshots. The safe area does not cover this because the bar is
+            // an overlay, not a bottom inset.
+            .padding(.bottom, 72)
         }
         .screenBackground()
         .navigationTitle("Progress")
@@ -88,6 +107,16 @@ struct ProgressDashboardView: View {
                    unit: "% of days",
                    needsScoreQualifier: false)
 
+        if !recent.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text("Recent sessions")
+                    .font(TypeScale.callout(rounded: theme.usesRoundedFont).weight(.semibold))
+                ForEach(recent, id: \.persistentModelID) { session in
+                    RecentSessionRow(session: session)
+                }
+            }
+        }
+
         if analysis.isTooEarlyToTell {
             AmblyoCard {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -119,6 +148,66 @@ struct ProgressDashboardView: View {
             .padding(.top, Spacing.sm)
     }
 
+    // MARK: Recent activity
+
+    /// One completed session, described in the terms the user experienced it in:
+    /// what, when, how long, how many answers.
+    ///
+    /// Deliberately says nothing about whether it went well. Accuracy on a
+    /// staircase is meaningless as a score — it converges on about 79% for
+    /// everybody, by construction, so showing "you got 79%" would invite a
+    /// comparison that means nothing and would look like a bad mark to a child.
+    struct RecentSessionRow: View {
+        let session: SessionRecord
+        @Environment(\.theme) private var theme
+
+        private var trialCount: Int { session.trials.filter { !$0.discarded }.count }
+
+        private var when: String {
+            let calendar = Calendar.current
+            if calendar.isDateInToday(session.startedAt) { return "Today" }
+            if calendar.isDateInYesterday(session.startedAt) { return "Yesterday" }
+            return session.startedAt.formatted(.dateTime.weekday(.wide).day().month(.abbreviated))
+        }
+
+        private var stoppedEarly: Bool {
+            session.endedReason == .fatigue || session.endedReason == .userStopped
+        }
+
+        var body: some View {
+            AmblyoCard {
+                HStack(spacing: Spacing.md) {
+                    Image(systemName: session.track.systemImage)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color.brandPrimary)
+                        .frame(width: 34, height: 34)
+                        .background(Color.brandPrimary.opacity(0.12), in: Circle())
+                        .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(when)
+                            .font(TypeScale.callout(rounded: theme.usesRoundedFont).weight(.semibold))
+                        Text("\(session.actualSeconds / 60) min · \(trialCount) answers")
+                            .font(TypeScale.caption(rounded: theme.usesRoundedFont))
+                            .foregroundStyle(Color.textSecondary)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    // Said plainly rather than hidden. Stopping early is an
+                    // allowed, encouraged outcome in this app, and a record that
+                    // quietly omitted it would misrepresent the history.
+                    if stoppedEarly {
+                        Text("Stopped early")
+                            .font(TypeScale.caption(rounded: theme.usesRoundedFont))
+                            .foregroundStyle(Color.textSecondary)
+                    }
+                }
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+
     // MARK: Loading
 
     private func reload() {
@@ -126,6 +215,7 @@ struct ProgressDashboardView: View {
         do {
             let repository = SessionRepository(context: context)
             let sessions = try repository.sessions(for: profile)
+            recent = Array(sessions.prefix(6))
 
             var observations: [ProgressAnalyzer.Observation] = []
             var built: [String: [(day: Date, value: Double)]] = [:]

@@ -36,6 +36,10 @@ struct ExerciseStage<Content: View, Answers: View>: View {
     let secondsRemaining: Int
     let secondsTotal: Int
 
+    /// The exercise being run, so the stage can show its own instructions.
+    /// Optional only so a preview can omit it; every real caller passes one.
+    var descriptor: ExerciseDescriptor?
+
     var onPause: () -> Void = {}
     var onFatigue: () -> Void = {}
 
@@ -44,6 +48,7 @@ struct ExerciseStage<Content: View, Answers: View>: View {
 
     @Environment(SettingsStore.self) private var settings
     @Environment(\.theme) private var theme
+    @State private var showingHowTo = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,6 +58,9 @@ struct ExerciseStage<Content: View, Answers: View>: View {
         }
         .background(Color.surfaceBase.ignoresSafeArea())
         .onAppear { Haptics.prepare(settings: settings) }
+        .sheet(isPresented: $showingHowTo) {
+            if let descriptor { HowToSheet(descriptor: descriptor) }
+        }
     }
 
     // MARK: Chrome
@@ -67,6 +75,28 @@ struct ExerciseStage<Content: View, Answers: View>: View {
                 .lineLimit(1)
 
             Spacer(minLength: 0)
+
+            // "HOW DO I DO THIS?", AVAILABLE MID-EXERCISE AND NOT ONLY BEFORE IT.
+            //
+            // The instructions were shown once, on the ready screen, and then
+            // never again. That is the wrong moment: before the first trial the
+            // words describe something the user has not seen yet, and the point
+            // at which they actually want them is thirty seconds in, staring at
+            // a patch of stripes with no idea what "leans" means. Reading help
+            // does not pause the clock by accident either — the sheet pauses it,
+            // because otherwise reading how to do it costs you the session.
+            Button {
+                onPause()
+                showingHowTo = true
+            } label: {
+                Image(systemName: "questionmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .frame(width: 40, height: 40)
+                    .background(Color.brandPrimary.opacity(0.14), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.brandPrimary)
+            .accessibilityLabel("How to do this exercise")
 
             Button(action: onPause) {
                 Image(systemName: "pause.fill")

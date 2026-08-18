@@ -75,6 +75,7 @@ struct ChoiceExerciseView<Presenter: ChoiceExercisePresenter>: View {
                     title: runner.descriptor.title,
                     secondsRemaining: runner.secondsRemaining,
                     secondsTotal: runner.plannedSessionSeconds,
+                    descriptor: runner.descriptor,
                     onPause: { runner.pause() },
                     onFatigue: { runner.reportFatigue() }
                 ) {

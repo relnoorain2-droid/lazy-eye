@@ -18,9 +18,22 @@ struct AmblyoCard<Content: View>: View {
     var body: some View {
         HStack(spacing: 0) {
             if let accent {
-                Rectangle()
+                // AN INSET CAPSULE, NOT A FULL-HEIGHT SQUARE RECTANGLE.
+                //
+                // It was `Rectangle().frame(width: 4)` running the card's whole
+                // height, then clipped by the card's rounded corners. That is
+                // the small coloured sliver visible at the top-left of every
+                // card in the first device screenshots: the corner radius eats
+                // most of the bar and leaves a fragment that reads as a
+                // rendering fault rather than an accent.
+                //
+                // Inset and rounded, it sits inside the corner radius instead of
+                // being cut by it.
+                Capsule()
                     .fill(accent)
                     .frame(width: 4)
+                    .padding(.vertical, Spacing.md)
+                    .padding(.leading, Spacing.sm)
                     .accessibilityHidden(true)
             }
             content()

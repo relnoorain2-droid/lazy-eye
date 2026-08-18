@@ -41,6 +41,8 @@ struct TrainView: View {
     @State private var startError: String?
     @State private var secondsUsedToday = 0
     @State private var loadError: String?
+    /// The exercise whose instructions are open, if any.
+    @State private var howTo: ExerciseDescriptor?
 
     private var profile: Profile? { activeProfiles.first }
 
@@ -68,6 +70,9 @@ struct TrainView: View {
         }
         .sheet(isPresented: $showingSelfCheck) {
             AnaglyphSelfCheckView(calibration: profile?.calibration)
+        }
+        .sheet(item: $howTo) { descriptor in
+            HowToSheet(descriptor: descriptor)
         }
         .sheet(item: $paywallContext) { context in
             PaywallView(context: context,
@@ -135,6 +140,12 @@ struct TrainView: View {
             }
             .padding()
             .readableContentWidth()
+            // Clears the floating tab bar. On iOS 26 the tab bar hovers over
+            // the scroll view rather than sitting below it, so the last card
+            // ends up half-hidden behind it — visible in the first device
+            // screenshots. The safe area does not cover this because the bar is
+            // an overlay, not a bottom inset.
+            .padding(.bottom, 72)
         }
         .screenBackground()
     }
@@ -164,10 +175,32 @@ struct TrainView: View {
                     .font(TypeScale.caption(rounded: theme.usesRoundedFont))
                     .foregroundStyle(Color.textSecondary)
 
-                AmblyoButton(title: "Start", systemImage: "play.fill") {
-                    start(descriptor, profile: profile, cap: cap)
+                HStack(spacing: Spacing.sm) {
+                    AmblyoButton(title: "Start", systemImage: "play.fill") {
+                        start(descriptor, profile: profile, cap: cap)
+                    }
+                    .disabled(cap.isDailyCapReached)
+
+                    // "HOW TO" BEFORE COMMITTING, AS WELL AS DURING.
+                    // The same sheet is reachable from inside the exercise, but
+                    // a new user deciding whether to tap Start on "Vernier"
+                    // needs it BEFORE they are in a timed session — and a
+                    // description they can only read by starting the thing is
+                    // not a description.
+                    Button {
+                        howTo = descriptor
+                    } label: {
+                        Image(systemName: "questionmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .frame(width: Layout.buttonHeight, height: Layout.buttonHeight)
+                            .background(Color.brandPrimary.opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: Radius.button,
+                                                             style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.brandPrimary)
+                    .accessibilityLabel("How to do \(descriptor.title)")
                 }
-                .disabled(cap.isDailyCapReached)
             }
         }
     }

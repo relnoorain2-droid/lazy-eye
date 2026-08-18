@@ -55,6 +55,7 @@ struct GaborOrientationView: View {
                     title: GaborOrientationExercise.descriptor.title,
                     secondsRemaining: runner.secondsRemaining,
                     secondsTotal: runner.plannedSessionSeconds,
+                    descriptor: runner.descriptor,
                     onPause: { runner.pause() },
                     onFatigue: { runner.reportFatigue() }
                 ) {

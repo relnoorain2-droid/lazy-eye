@@ -492,3 +492,56 @@ The general shape, since it is the third time this project has produced it: a
 default is never in one place. It was in the store, the draft, two screens of
 copy and a design rule, and changing one of five is indistinguishable from
 changing none.
+
+## Instructions, Progress that acknowledges, and Today that is not a memo
+
+Three requests from the second device test, and one of them changed how I think
+about the others.
+
+**"As a new person I don't understand how to do it."** Instructions existed —
+once, on the ready screen, before the first trial. That is the wrong moment: the
+words describe something the user has not seen yet, and the moment they actually
+want them is thirty seconds in, looking at a patch of stripes with no idea what
+"leans" means. There is now a `?` on every exercise, in the shared chrome, and
+on every Train card so it can be read BEFORE committing to a timed session.
+Opening it pauses the clock — otherwise reading how to do the exercise costs you
+the exercise.
+
+`HowToSheet` is built from the descriptor rather than written 32 times, so the
+help cannot disagree with the exercise it describes. The one part that is not
+automatic is the part that matters most: **getting things wrong is expected.**
+A staircase settles where the user is right about four times in five, so roughly
+one answer in five is MEANT to be wrong. Nobody infers that from a screen of
+stripes, and without it a new user reads rising difficulty as failure and stops.
+
+**"Make sure Progress shows whatever the user is doing."** It did — but only
+inferentially. Every number on that screen refuses to speak until it has eight
+practice days, which is correct and meant that after a first session the screen
+said, in effect, nothing. Refusing to over-claim is not the same as refusing to
+acknowledge. There is now a "Recent sessions" list: what, when, how long, how
+many answers, and whether it was stopped early. It makes no claim about vision.
+
+Deliberately absent: accuracy. A staircase converges on ~79% for everyone by
+construction, so "you scored 79%" invites a comparison that means nothing and
+looks like a bad mark to a child.
+
+**"Today looks like a Word document."** Accurate. A small grey word, a name, then
+a column of white cards containing sentences — every element the same weight, no
+colour, no focal point. Correct information arranged as a memo. It now opens with
+a ring for today's minutes and a streak on a tinted panel, because a person
+opening a training app wants two things in the first second and neither is a
+paragraph: am I on track, and what do I press.
+
+The ring targets the PLANNED session length, not the daily cap. Ringing the cap
+as a goal would tell users to aim at the maximum screen time the app permits,
+which argues with the safety limit enforced two lines away. It also fills and
+stops — no overshoot, no gold, no second lap.
+
+### Two real defects found while doing the above
+
+The coloured sliver on every card was `Rectangle().frame(width: 4)` running the
+card's full height and then being clipped by the corner radius, leaving a
+fragment that reads as a rendering fault. It is an inset capsule now.
+
+Content ran under the floating iOS 26 tab bar on all three tabs. The safe area
+does not cover it because that bar is an overlay rather than a bottom inset.
