@@ -545,3 +545,33 @@ fragment that reads as a rendering fault. It is an inset capsule now.
 
 Content ran under the floating iOS 26 tab bar on all three tabs. The safe area
 does not cover it because that bar is an overlay rather than a bottom inset.
+
+## All 32 exercises now present through the shared stage
+
+The previous batch reached seven of them. Finishing the other twenty-five turned
+out to be one file, not twenty-five: fourteen views already rendered through an
+`ExerciseScaffold` nobody had touched, so rewriting that single struct moved the
+whole games and dichoptic set at once. Two stragglers (Find It, Motion Field)
+were migrated individually.
+
+Worth recording because the instinct was wrong. The plan was "migrate 25 views,
+mechanically" — 25 chances to leave one behind, and no way to tell which. Looking
+for the shared thing first turned a long, error-prone job into three edits.
+
+`ExerciseStage` gained a no-answer-bar form for the exercises where the stimulus
+IS the control: you tap the balloon, not a button underneath it. They still get
+the countdown, the how-to and the fatigue button, because those are needed
+regardless of how an answer is given — and the fatigue button in particular must
+be reachable from all 32 without exception.
+
+`ExerciseStageCoverageTests` pins what actually goes wrong here. It cannot
+assert pixels, but it can assert that every registered exercise maps to a view,
+that no stale id survives a rename, and that every descriptor carries enough
+text for its generated how-to to say something. Layout facts are exactly what
+this suite has historically been blind to — that blindness shipped a tab bar
+with no route to setup, and a check-in with no stimulus.
+
+Left behind deliberately: `controls` in FindItView and MotionFieldView, and
+`trialState`/`statusBar` in GaborOrientationView, are now unreferenced. Private
+and harmless, but they are dead code referencing the old chrome and should go in
+a cleanup pass rather than in a change that is already large.

@@ -36,23 +36,36 @@ struct MotionFieldView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack {
-            Color.stimulusNeutral.ignoresSafeArea()
-
+        Group {
             switch runner.phase {
             case .ready:
-                readyState
+                readyState.sessionBackdrop()
+
             case .presenting, .feedback:
-                trialState
+                // The stimulus is the control here — the answer is given by
+                // tapping the field itself — so the stage carries the chrome
+                // (countdown, how-to, pause, fatigue) and no answer bar.
+                ExerciseStage(
+                    title: runner.descriptor.title,
+                    secondsRemaining: runner.secondsRemaining,
+                    secondsTotal: runner.plannedSessionSeconds,
+                    descriptor: runner.descriptor,
+                    onPause: { runner.pause() },
+                    onFatigue: { runner.reportFatigue() }
+                ) {
+                    trialState
+                }
+
             case .onBreak(let remaining):
-                BreakCard(secondsRemaining: remaining)
+                BreakCard(secondsRemaining: remaining).sessionBackdrop()
+
             case .paused:
-                pausedState
+                pausedState.sessionBackdrop()
+
             case .finished(let reason):
                 SessionSummaryView(runner: runner, reason: reason) { onFinish(reason) }
             }
         }
-        .overlay(alignment: .bottom) { controls }
         .statusBarHidden(runner.phase.acceptsResponses)
         .onChange(of: runner.currentTrial?.id) { _, _ in beginTrial() }
         .onDisappear { runner.stop() }

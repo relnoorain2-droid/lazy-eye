@@ -24,64 +24,93 @@ struct ExerciseScaffold<Content: View>: View {
     var onFinish: (EndReason) -> Void
     @ViewBuilder var content: () -> Content
 
+    // THIS ONE REWRITE COVERS FOURTEEN EXERCISE VIEWS.
+    //
+    // Every game and most dichoptic exercises render through this scaffold, so
+    // after the first device test — "the visuals are very bad, none of them
+    // proper" — this was the highest-leverage file in the project. Migrating 25
+    // individual views would have been 25 chances to leave one behind; this is
+    // one place, and nothing can miss it.
+    //
+    // What changed: the grey no longer covers the entire screen (it was there
+    // because the monocular stimuli need it, and it was applied to every state
+    // including the ready and paused screens, which have no stimulus at all),
+    // the timer is a ring rather than absent, and there is a "how to" button.
+    //
+    // What did NOT change: the fatigue button, the break card, the cap, the
+    // honest summary. Those were the reason this scaffold was written and they
+    // survive the visual change untouched.
     var body: some View {
-        ZStack {
-            Color.stimulusNeutral.ignoresSafeArea()
-
+        Group {
             switch runner.phase {
             case .ready:
-                VStack(spacing: Spacing.lg) {
-                    Image(systemName: icon)
-                        .font(.system(size: 48))
-                        .foregroundStyle(Color.brandPrimary)
-                        .accessibilityHidden(true)
-
-                    Text(runner.descriptor.title).font(TypeScale.displayLarge())
-
-                    Text(instructions)
-                        .font(TypeScale.body())
-                        .foregroundStyle(Color.textSecondary)
-                        .multilineTextAlignment(.center)
-
-                    EvidenceBadge(tier: runner.descriptor.evidenceTier)
-
-                    if let warning {
-                        SafetyBanner(level: .info, title: warning.title,
-                                     message: warning.message)
-                    }
-
-                    AmblyoButton(title: "Start", systemImage: "play.fill") { runner.start() }
-                }
-                .padding(Spacing.lg)
-                .readableContentWidth()
+                readyState.sessionBackdrop()
 
             case .presenting, .feedback:
-                content()
+                // No answer bar: in these exercises the stimulus IS the control.
+                // You tap the balloon, not a button underneath it.
+                ExerciseStage(
+                    title: runner.descriptor.title,
+                    secondsRemaining: runner.secondsRemaining,
+                    secondsTotal: runner.plannedSessionSeconds,
+                    descriptor: runner.descriptor,
+                    onPause: { runner.pause() },
+                    onFatigue: { runner.reportFatigue() }
+                ) {
+                    content()
+                }
 
             case .onBreak(let remaining):
-                BreakCard(secondsRemaining: remaining)
+                BreakCard(secondsRemaining: remaining).sessionBackdrop()
 
             case .paused:
-                VStack(spacing: Spacing.lg) {
-                    Text("Paused").font(TypeScale.title())
-                    AmblyoButton(title: "Continue", systemImage: "play.fill") { runner.resume() }
-                    AmblyoButton(title: "Finish session", style: .tertiary) { runner.stopEarly() }
-                }
-                .padding(Spacing.lg)
-                .readableContentWidth()
+                pausedState.sessionBackdrop()
 
             case .finished(let reason):
                 SessionSummaryView(runner: runner, reason: reason) { onFinish(reason) }
             }
         }
-        .overlay(alignment: .bottom) {
-            if !runner.phase.isTerminal && runner.phase != .ready {
-                SessionControlCapsule(onFatigue: { runner.reportFatigue() },
-                                      onPause: { runner.pause() })
-                    .padding(.bottom, Spacing.md)
-            }
-        }
         .onDisappear { runner.stop() }
+    }
+
+    private var readyState: some View {
+        VStack(spacing: Spacing.lg) {
+            Image(systemName: icon)
+                .font(.system(size: 48))
+                .foregroundStyle(Color.brandPrimary)
+                .accessibilityHidden(true)
+
+            Text(runner.descriptor.title).font(TypeScale.displayLarge())
+
+            Text(instructions)
+                .font(TypeScale.body())
+                .foregroundStyle(Color.textSecondary)
+                .multilineTextAlignment(.center)
+
+            EvidenceBadge(tier: runner.descriptor.evidenceTier)
+
+            if let warning {
+                SafetyBanner(level: .info, title: warning.title,
+                             message: warning.message)
+            }
+
+            AmblyoButton(title: "Start", systemImage: "play.fill") { runner.start() }
+        }
+        .padding(Spacing.lg)
+        .readableContentWidth()
+    }
+
+    private var pausedState: some View {
+        VStack(spacing: Spacing.lg) {
+            Text("Paused").font(TypeScale.title())
+            Text("Your progress is saved.")
+                .font(TypeScale.callout())
+                .foregroundStyle(Color.textSecondary)
+            AmblyoButton(title: "Continue", systemImage: "play.fill") { runner.resume() }
+            AmblyoButton(title: "Finish session", style: .tertiary) { runner.stopEarly() }
+        }
+        .padding(Spacing.lg)
+        .readableContentWidth()
     }
 }
 

@@ -141,11 +141,45 @@ struct ExerciseStage<Content: View, Answers: View>: View {
 
     // MARK: Answer bar
 
+    /// Absent entirely when there is nothing to put in it, rather than an empty
+    /// padded strip. A games screen with a blank 90 pt band under the field
+    /// would look like something failed to load.
+    @ViewBuilder
     private var answerBar: some View {
-        answers()
-            .padding(.horizontal, Spacing.md)
-            .padding(.top, Spacing.md)
-            .padding(.bottom, Spacing.sm)
+        if Answers.self != EmptyView.self {
+            answers()
+                .padding(.horizontal, Spacing.md)
+                .padding(.top, Spacing.md)
+                .padding(.bottom, Spacing.sm)
+        }
+    }
+}
+
+extension ExerciseStage where Answers == EmptyView {
+
+    /// For exercises whose stimulus IS the control — the games, where you tap a
+    /// balloon rather than a button underneath one, and the tracking tasks
+    /// where you follow a dot.
+    ///
+    /// They still get the chrome: the countdown, the how-to, pause, and the
+    /// fatigue button. Those are the parts a user needs regardless of how the
+    /// answer is given, and the fatigue button in particular must be reachable
+    /// from every exercise in the app without exception.
+    init(title: String,
+         secondsRemaining: Int,
+         secondsTotal: Int,
+         descriptor: ExerciseDescriptor? = nil,
+         onPause: @escaping () -> Void = {},
+         onFatigue: @escaping () -> Void = {},
+         @ViewBuilder content: @escaping () -> Content) {
+        self.init(title: title,
+                  secondsRemaining: secondsRemaining,
+                  secondsTotal: secondsTotal,
+                  descriptor: descriptor,
+                  onPause: onPause,
+                  onFatigue: onFatigue,
+                  content: content,
+                  answers: { EmptyView() })
     }
 }
 
