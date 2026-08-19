@@ -631,3 +631,40 @@ It still told users sound was off by default. Corrected, with the reason a wrong
 answer gets a soft low tone rather than a buzz: the staircase is built to produce
 a wrong answer about one trial in five, and buzzing at that punishes the user for
 the method working.
+
+## Build failure: `answerButtons` ended up in the wrong struct
+
+    AssessmentTrialView.swift:41: cannot find 'answerButtons' in scope
+    AssessmentTrialView.swift:158: cannot find 'presenter' in scope
+
+Self-inflicted, and worth being precise about the cause. When I added
+`AssessmentStereoView` and `AssessmentBalanceView` to that file, the edit
+inserted a closing brace and a new struct BETWEEN `stimulusPanel` and
+`answerButtons`. So `answerButtons` — which reads `presenter`, `trial` and
+`isAnswerable` — became a member of `AssessmentBalanceView`, which has none of
+them. `AssessmentTrialView.body` then referenced a property that was no longer
+its own.
+
+The two odd-looking follow-on errors (`missing argument label
+'_immutableCocoaArray:'`, `tuple type '(_, _)' has no member 'offset'`) were the
+compiler trying to make sense of `Array(options.enumerated())` with `options`
+undefined — noise from the first error, not separate faults.
+
+### Why the linters did not catch it
+
+They cannot, and I should not pretend otherwise. `check_symbols.py` indexes
+types and members and verifies member ownership for QUALIFIED calls (`X.foo()`).
+This was an unqualified reference to a property of the enclosing type, moved to a
+different enclosing type, with braces still perfectly balanced — the file is
+structurally valid Swift and only the type checker can see the problem. A checker
+that flagged bare identifiers against the enclosing type is the same design that
+produced 131 false positives when it was tried for initialiser labels.
+
+### The actual lesson
+
+This is the third structural edit made by slicing Swift source with a Python
+script, and the second time it produced a broken file. Scripted surgery is right
+for a mechanical change repeated across many files; it is the wrong tool for
+inserting a type into the middle of another one, where the correctness question
+is "which brace closes what" and a script cannot answer it. Targeted edits with
+the surrounding context visible would have made this impossible.

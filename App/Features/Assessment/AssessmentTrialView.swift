@@ -63,6 +63,24 @@ struct AssessmentTrialView: View {
         .frame(height: 300)
         .clipped()
     }
+
+    private var answerButtons: some View {
+        let options = presenter.answers(for: trial)
+        let columns = options.count <= 2 ? options.count : 2
+        return LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.sm),
+                           count: max(1, columns)),
+            spacing: Spacing.sm
+        ) {
+            ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                AnswerButton(title: option.label,
+                             systemImage: option.systemImage,
+                             isEnabled: isAnswerable) {
+                    onAnswer(index)
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Live stimuli
@@ -85,9 +103,14 @@ struct AssessmentStereoView: View {
 
     private let exercise = DepthPopExercise()
 
+    /// Built outside `body` rather than with a `let` inside it. Result builders
+    /// do allow declarations now, but a plain computed property is one less
+    /// thing depending on which Swift version the runner happens to ship.
+    private var made: (pair: StereogramPair, parameters: StereogramParameters) {
+        StereogramField.make(for: trial, exercise: exercise, calibration: calibration)
+    }
+
     var body: some View {
-        let made = StereogramField.make(for: trial, exercise: exercise,
-                                        calibration: calibration)
         VStack(spacing: Spacing.md) {
             StereogramField(pair: made.pair,
                             parameters: made.parameters,
@@ -151,24 +174,6 @@ struct AssessmentBalanceView: View {
                      systemImage: direction.systemImage,
                      isEnabled: isAnswerable) {
             onAnswer(direction.rawValue)
-        }
-    }
-
-    private var answerButtons: some View {
-        let options = presenter.answers(for: trial)
-        let columns = options.count <= 2 ? options.count : 2
-        return LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.sm),
-                           count: max(1, columns)),
-            spacing: Spacing.sm
-        ) {
-            ForEach(Array(options.enumerated()), id: \.offset) { index, option in
-                AnswerButton(title: option.label,
-                             systemImage: option.systemImage,
-                             isEnabled: isAnswerable) {
-                    onAnswer(index)
-                }
-            }
         }
     }
 }
