@@ -88,9 +88,18 @@ something far away, and come back later or tomorrow. Fatigue is not a sign that
 it is working.
 
 **How do I turn the sound off?**
-Sound is off by default. If you turned it on, there is a mute button in the top
-corner of every exercise — one tap. You can also turn each sound type off
-separately in Profile → Settings → Sound.
+A short tone confirms each answer, and that is on to start with. Background music
+and the spoken guide are off unless you switch them on.
+
+Three ways to silence it: your phone's silent switch works on this app like it
+does on any other, there is a mute button in the top corner of every exercise,
+and each sound type has its own switch in Profile → Settings → Sound.
+
+**Why does the app make a sound when I answer?**
+So you know the tap registered. It is deliberately quiet, and the tone for a
+wrong answer is softer and lower than the one for a right answer rather than a
+buzz — the difficulty is set so that roughly one answer in five is wrong, and
+being buzzed at for that would be punishing you for the exercise working.
 
 **What do the A, B and C badges mean?**
 They show what kind of research supports that type of exercise. Tap any badge

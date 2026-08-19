@@ -38,6 +38,30 @@ struct KinematogramParameters: Hashable, Sendable {
             case .left: .pi
             }
         }
+
+        // NAMES AND ICONS LIVE ON THE TYPE, NOT IN THE VIEWS.
+        // They were private helpers inside `BalanceMeterView`. The moment the
+        // Check-in needed the same four buttons, that became a second copy of
+        // the same switch — and two copies of "which arrow means up" is exactly
+        // how a screen ends up labelling a stimulus wrongly while still
+        // compiling and still passing every test.
+        var label: String {
+            switch self {
+            case .up: "Up"
+            case .right: "Right"
+            case .down: "Down"
+            case .left: "Left"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .up: "arrow.up"
+            case .right: "arrow.right"
+            case .down: "arrow.down"
+            case .left: "arrow.left"
+            }
+        }
     }
 
     var direction: Direction

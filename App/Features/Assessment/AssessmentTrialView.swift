@@ -63,6 +63,96 @@ struct AssessmentTrialView: View {
         .frame(height: 300)
         .clipped()
     }
+}
+
+// MARK: - Live stimuli
+
+/// The stereo sub-test's field.
+///
+/// Separate from `AssessmentTrialView` because it draws rather than rasterises:
+/// a random-dot stereogram is a Canvas of thousands of squares, not an image,
+/// so it cannot go through the `AssessmentPresenter` path the acuity and
+/// contrast sub-tests use. Same `StereogramField` D6 draws, so the number the
+/// check-in produces is measured with the stimulus the user trains on — which
+/// is the entire reason the battery borrows registered exercises.
+@MainActor
+struct AssessmentStereoView: View {
+
+    let trial: Trial
+    let calibration: CalibrationProfile
+    var isAnswerable: Bool = true
+    let onAnswer: (Int) -> Void
+
+    private let exercise = DepthPopExercise()
+
+    var body: some View {
+        let made = StereogramField.make(for: trial, exercise: exercise,
+                                        calibration: calibration)
+        VStack(spacing: Spacing.md) {
+            StereogramField(pair: made.pair,
+                            parameters: made.parameters,
+                            calibration: calibration)
+                .frame(maxWidth: .infinity)
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: Spacing.sm),
+                                GridItem(.flexible(), spacing: Spacing.sm)],
+                      spacing: Spacing.sm) {
+                ForEach(StereogramParameters.Shape.allCases, id: \.rawValue) { shape in
+                    AnswerButton(title: shape.label,
+                                 systemImage: shape.systemImage,
+                                 isEnabled: isAnswerable) {
+                        onAnswer(shape.rawValue)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The balance sub-test's field — the free tier's only measurement, and the one
+/// a reviewer is most likely to open.
+///
+/// It was showing "not in this build yet" over an empty panel, which is both a
+/// broken free tier and a Guideline 2.1 rejection waiting to happen. Same
+/// `BalanceField` D5 animates.
+@MainActor
+struct AssessmentBalanceView: View {
+
+    let trial: Trial
+    let calibration: CalibrationProfile
+    var isAnswerable: Bool = true
+    let onAnswer: (Int) -> Void
+
+    private let exercise = BalanceMeterExercise()
+
+    var body: some View {
+        VStack(spacing: Spacing.md) {
+            BalanceField(
+                signal: exercise.signalField(for: trial, calibration: calibration),
+                noise: exercise.noiseField(for: trial, calibration: calibration),
+                calibration: calibration,
+                signalSeed: UInt64(trial.payload.value("signalSeed")),
+                noiseSeed: UInt64(trial.payload.value("noiseSeed")))
+                .frame(maxWidth: .infinity)
+
+            VStack(spacing: Spacing.sm) {
+                directionButton(.up)
+                HStack(spacing: Spacing.sm) {
+                    directionButton(.left)
+                    directionButton(.right)
+                }
+                directionButton(.down)
+            }
+        }
+    }
+
+    private func directionButton(_ direction: KinematogramParameters.Direction) -> some View {
+        AnswerButton(title: direction.label,
+                     systemImage: direction.systemImage,
+                     isEnabled: isAnswerable) {
+            onAnswer(direction.rawValue)
+        }
+    }
 
     private var answerButtons: some View {
         let options = presenter.answers(for: trial)

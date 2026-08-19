@@ -38,9 +38,11 @@ struct DepthPopView: View {
     @State private var parameters: StereogramParameters?
     @State private var previewWithoutGlasses = false
 
-    private var compositor: AnaglyphCompositor {
-        AnaglyphCompositor(calibration: calibration)
-    }
+    // The compositor, the dot colouring, the background midpoint and the
+    // preview outline all moved to `StereogramField` when the Check-in needed
+    // the same stimulus. They are not duplicated here on purpose: two
+    // stereogram renderers would have drifted, and the battery borrows this
+    // exercise specifically so its measurement matches this screen.
 
     var body: some View {
         ExerciseScaffold(
@@ -65,15 +67,13 @@ struct DepthPopView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                Canvas { context, _ in
-                    draw(pair: pair, parameters: parameters, in: context)
-                }
-                .frame(width: pair.fieldPoints, height: pair.fieldPoints)
-                .background(backgroundColour)
-                .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-                .accessibilityLabel(previewWithoutGlasses
-                    ? "Preview with the hidden shape outlined"
-                    : "Speckled field. Name the shape that stands out.")
+                // Drawn by the SHARED field, which the Check-in also uses.
+                // Two renderers would have drifted, and the battery borrows this
+                // exercise precisely so its number matches this screen's.
+                StereogramField(pair: pair,
+                                parameters: parameters,
+                                calibration: calibration,
+                                previewWithoutGlasses: previewWithoutGlasses)
 
                 if parameters.isLimitedByDisplay {
                     // Honest, and specifically NOT framed as the user's limit.
@@ -88,14 +88,6 @@ struct DepthPopView: View {
                 previewToggle.padding(.horizontal, Spacing.lg).padding(.bottom, 96)
             }
         }
-    }
-
-    /// The compositor's midpoint, for the same reason as D5: compositing assumes
-    /// both layers sit around it, and any other background silently changes the
-    /// effective contrast of every dot.
-    private var backgroundColour: Color {
-        colour(amblyopic: AnaglyphCompositor.layerMidpoint,
-               fellow: AnaglyphCompositor.layerMidpoint)
     }
 
     private var shapeButtons: some View {
@@ -138,66 +130,6 @@ struct DepthPopView: View {
 
     // MARK: Drawing
 
-    private func draw(pair: StereogramPair, parameters: StereogramParameters,
-                      in context: GraphicsContext) {
-        // A dot at the same position in both fields is common to the two images
-        // and must be bright to BOTH eyes. Most of the field is common — only
-        // the shape region differs — so getting this wrong would make the whole
-        // background flicker between the eyes and swamp the disparity.
-        let amblyopicOnly = colour(amblyopic: 1.0,
-                                   fellow: AnaglyphCompositor.layerMidpoint)
-        let fellowOnly = colour(amblyopic: AnaglyphCompositor.layerMidpoint,
-                                fellow: 1.0)
-        let shared = colour(amblyopic: 1.0, fellow: 1.0)
-
-        let fellowKeys = Set(pair.fellowDots.map(PointKey.init))
-        let amblyopicKeys = Set(pair.amblyopicDots.map(PointKey.init))
-
-        for dot in pair.amblyopicDots {
-            let isShared = fellowKeys.contains(PointKey(dot))
-            context.fill(square(at: dot, side: pair.dotPoints),
-                         with: .color(isShared ? shared : amblyopicOnly))
-        }
-        for dot in pair.fellowDots where !amblyopicKeys.contains(PointKey(dot)) {
-            context.fill(square(at: dot, side: pair.dotPoints),
-                         with: .color(fellowOnly))
-        }
-
-        guard previewWithoutGlasses else { return }
-        let inset = pair.fieldPoints * (1 - parameters.shapeFraction) / 2
-        let box = CGRect(x: inset, y: inset,
-                         width: pair.fieldPoints - 2 * inset,
-                         height: pair.fieldPoints - 2 * inset)
-        context.stroke(Path(roundedRect: box, cornerRadius: 4),
-                       with: .color(.orange), lineWidth: 2)
-    }
-
-    /// Dot positions in the two fields come from the same integer arithmetic, so
-    /// rounding to whole points is an exact comparison here rather than an
-    /// approximate one.
-    private struct PointKey: Hashable {
-        let x: Int
-        let y: Int
-        init(_ point: CGPoint) {
-            x = Int(point.x.rounded())
-            y = Int(point.y.rounded())
-        }
-    }
-
-    private func square(at origin: CGPoint, side: Double) -> Path {
-        Path(CGRect(x: origin.x, y: origin.y, width: side, height: side))
-    }
-
-    private func colour(amblyopic: Double, fellow: Double) -> Color {
-        if previewWithoutGlasses {
-            // Both layers to all channels so the field is visible to the naked
-            // eye. Not the real stimulus, and labelled as such on screen.
-            return Color(white: max(amblyopic, fellow))
-        }
-        let pixel = compositor.composite(amblyopic: amblyopic, fellow: fellow)
-        return Color(red: pixel.red, green: pixel.green, blue: pixel.blue)
-    }
-
     // MARK: Trial
 
     private func beginTrial() {
@@ -206,9 +138,9 @@ struct DepthPopView: View {
             parameters = nil
             return
         }
-        let built = exercise.parameters(for: trial, calibration: calibration)
-        var generator = SeededGenerator(seed: UInt64(trial.payload.value("seed")))
-        parameters = built
-        pair = StereogramGenerator.make(built, generator: &generator)
+        let made = StereogramField.make(for: trial, exercise: exercise,
+                                        calibration: calibration)
+        parameters = made.parameters
+        pair = made.pair
     }
 }

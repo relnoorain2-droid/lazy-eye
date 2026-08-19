@@ -133,7 +133,11 @@ struct TrainView: View {
                     lockedSection(locked)
                 }
 
-                Text("More exercises are being added. Everything here is included at no extra cost once you have it.")
+                // "More are being added" was removed before submission. It was
+                // true and it reads to App Review as an admission that the app
+                // is incomplete (Guideline 2.1), which is a rejection over a
+                // sentence that promises nothing the user needs.
+                Text("Every exercise here is included in one subscription. Nothing is sold separately.")
                     .font(TypeScale.caption(rounded: theme.usesRoundedFont))
                     .foregroundStyle(Color.textSecondary)
                     .padding(.top, Spacing.sm)

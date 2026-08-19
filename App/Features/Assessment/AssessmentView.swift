@@ -183,26 +183,26 @@ struct AssessmentView: View {
                     runner.respond(answer: answer)
                 }
                 .id(trial.id)
-            } else if let trial = runner.currentTrial {
-                // Balance and stereo draw animated anaglyph canvases rather than
-                // rasterised images, so they cannot borrow a still renderer. The
-                // buttons still carry REAL labels rather than 1/2/3/4, and the
-                // screen says what it is waiting for — which is the difference
-                // between an honest gap and the blank panel that shipped.
-                AmblyoCard {
-                    VStack(spacing: Spacing.sm) {
-                        Image(systemName: "eyeglasses")
-                            .font(.system(size: 32))
-                            .foregroundStyle(Color.brandPrimary)
-                        Text("This sub-test needs its moving stimulus, which is not in this build yet.")
-                            .font(TypeScale.caption(rounded: theme.usesRoundedFont))
-                            .foregroundStyle(Color.textSecondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, Spacing.lg)
+            } else if let trial = runner.currentTrial, runner.currentTest == .balance {
+                // The free tier's ONLY measurement, and the one a reviewer is
+                // most likely to open. It showed "not in this build yet" over an
+                // empty panel — a broken free tier and a Guideline 2.1 rejection
+                // in one screen.
+                AssessmentBalanceView(trial: trial,
+                                      calibration: calibration,
+                                      isAnswerable: true) { answer in
+                    runner.respond(answer: answer)
                 }
                 .id(trial.id)
+
+            } else if let trial = runner.currentTrial, runner.currentTest == .stereo {
+                AssessmentStereoView(trial: trial,
+                                     calibration: calibration,
+                                     isAnswerable: true) { answer in
+                    runner.respond(answer: answer)
+                }
+                .id(trial.id)
+
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 220)

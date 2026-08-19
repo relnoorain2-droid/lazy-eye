@@ -575,3 +575,59 @@ Left behind deliberately: `controls` in FindItView and MotionFieldView, and
 `trialState`/`statusBar` in GaborOrientationView, are now unreferenced. Private
 and harmless, but they are dead code referencing the old chrome and should go in
 a cleanup pass rather than in a change that is already large.
+
+## Check-in completed: Balance and Stereo now show their real stimuli
+
+The last internal gap, and the one that would have been rejected.
+
+`AssessmentView` was showing "This sub-test needs its moving stimulus, which is
+not in this build yet" over an empty panel for two of the four sub-tests. Two
+problems, and the second is worse than the first:
+
+1. **Balance is the FREE TIER'S ONLY CHECK-IN.** `availableTests(isPro: false)`
+   returns exactly `[.balance]`. So a non-subscriber — and quite possibly the
+   App Review account — opens Check-in and the only thing available is a
+   placeholder.
+2. Visible "not in this build yet" text is a textbook Guideline 2.1 rejection.
+   Honest copy in a TestFlight build; a rejection in a submission.
+
+### How it was done, and why not the quick way
+
+The quick way was a second stereogram renderer and a second dot-field animation
+inside the assessment. That would have broken the guarantee the battery exists
+for: it BORROWS registered exercises so the number on the Progress chart is
+measured with the same stimulus the user trains on. Two renderers drift the
+first time either is touched, silently, and the drift would show up months later
+as a trend that compares two different measurements.
+
+So both were extracted into shared components instead:
+
+- `StereogramField` — still image. Takes a pair and draws; the dot-colouring
+  rules travel with it, because "a dot present in both fields must be bright to
+  BOTH eyes" is the kind of thing a second implementation gets wrong while
+  looking correct.
+- `BalanceField` — animated, and therefore owns its own dots, generators and
+  frame clock. Putting that state in the caller would make every caller
+  reimplement the animation loop. Two generators, not one: sharing would
+  correlate the noise with the signal, and correlated noise is not noise.
+
+`D5` and `D6` now render through the same components as the check-in. Both lost
+their private copies of the drawing code rather than keeping a duplicate.
+
+`KinematogramParameters.Direction` gained `label` and `systemImage`. They were
+private helpers in `BalanceMeterView`; the moment a second screen needed the same
+four buttons that became two copies of "which arrow means up", which is how a
+screen ends up mislabelling a stimulus while compiling and passing every test.
+
+### Also removed before submission
+
+"More exercises are being added" on the Train tab. True, and it reads to App
+Review as an admission that the app is incomplete — a rejection risk over a
+sentence that promised the user nothing.
+
+### The support page was stale
+
+It still told users sound was off by default. Corrected, with the reason a wrong
+answer gets a soft low tone rather than a buzz: the staircase is built to produce
+a wrong answer about one trial in five, and buzzing at that punishes the user for
+the method working.
