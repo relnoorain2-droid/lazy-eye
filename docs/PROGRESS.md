@@ -758,3 +758,26 @@ comply" rather than "does the listing comply". Section 7 now leads with it.
 Worth noting this was an automated pre-review check — it never reached a human,
 so nothing else in the submission was examined. A pass here is not a signal
 about anything else.
+
+## Screenshots removed from version control
+
+Committed by mistake — 25 MB of PNGs in `screenshort/` and
+`appstore-screenshots/`, caught by the user before the next push added more.
+
+**They never affected the size of the shipped app.** The Xcode target compiles
+`sources: [App]` (project.yml), so nothing outside `App/` reaches the IPA. That
+part of the worry was unfounded and worth saying plainly rather than accepting.
+
+They are still wrong to have in the repo, for a different reason: every CI
+checkout downloads them before a macOS runner starts work, on a runner billed at
+ten times the Linux rate. Git also stores a changed binary in full rather than as
+a diff, so every regenerated set would be kept forever at full size.
+
+`git rm --cached` plus a `.gitignore` rule. The files stay on disk — they are
+needed for the upload — and the READMEs stay TRACKED, because which folder goes
+in which App Store Connect slot is knowledge worth version-controlling. The
+pictures are one command to rebuild.
+
+The 25 MB already in history stays there. Rewriting history to reclaim it is
+possible and is not worth the risk on a repo this size for a saving nobody will
+notice.

@@ -45,3 +45,21 @@ desktop.ini
 # Local secrets
 .env
 .env.local
+
+# Screenshots — raw captures and generated App Store panels
+#
+# These do NOT affect the size of the shipped app: the Xcode target compiles
+# `sources: [App]` only (project.yml), so nothing here is ever inside the IPA.
+# They are excluded for a different reason — 25 MB of PNGs that every CI
+# checkout has to download before a macOS runner starts working, on a runner
+# billed at 10x. Git also never forgets a binary, so each regenerated set would
+# be stored again in full rather than as a diff.
+#
+# The READMEs stay tracked: they explain which folder goes in which App Store
+# Connect slot, and that knowledge is worth version-controlling. The pictures
+# are rebuilt in one command by scripts/make_screenshots.py.
+screenshort/
+appstore-screenshots/**/*.png
+appstore-screenshots/*.png
+!appstore-screenshots/**/README.md
+!appstore-screenshots/README.md
