@@ -23,8 +23,31 @@ struct ExerciseSessionScreen: View {
 
     let runner: SessionRunner
     let descriptor: ExerciseDescriptor
-    let calibration: CalibrationProfile
     let onFinish: () -> Void
+
+    /// THE ONE PLACE AN UNCALIBRATED PROFILE IS SUBSTITUTED.
+    ///
+    /// Every exercise view is handed its calibration from here, so this is the
+    /// single boundary between "the number we measured" and "the number we
+    /// draw with". Uncalibrated, `points(forDegrees:)` correctly returns zero —
+    /// and every game then drew a nine-by-twelve POINT field, which is why
+    /// Rhythm Tap, Maze Runner and Star Tracer came back from the device as
+    /// blank grey rectangles.
+    ///
+    /// Substituting here rather than inside the model keeps the model honest:
+    /// anything that measures still gets zero and still has to deal with it.
+    private let rawCalibration: CalibrationProfile
+    private var calibration: CalibrationProfile { rawCalibration.forDrawing }
+
+    init(runner: SessionRunner,
+         descriptor: ExerciseDescriptor,
+         calibration: CalibrationProfile,
+         onFinish: @escaping () -> Void) {
+        self.runner = runner
+        self.descriptor = descriptor
+        self.rawCalibration = calibration
+        self.onFinish = onFinish
+    }
 
     /// Exercise ids this screen presents with a purpose-built view. Kept next to
     /// the switch so a test can compare it against the registry — the two drift

@@ -121,6 +121,37 @@ extension CalibrationProfile {
         return sizeCM * screenPointsPerCM
     }
 
+    /// A documented stand-in for a profile that has not been calibrated yet.
+    ///
+    /// WHY THIS EXISTS, AND WHY `points(forDegrees:)` STILL RETURNS ZERO.
+    ///
+    /// Returning zero for an uncalibrated profile was a deliberate choice and a
+    /// correct one: a measurement app must never quietly hand back a size it
+    /// cannot justify. `CalibrationGeometryTests.incompleteIsSafe` pins it.
+    ///
+    /// The half that was missing is that NOTHING HANDLED THE ZERO. `GameField`
+    /// clamped it with `max(pointsPerDegree, 1)`, so an uncalibrated user got a
+    /// nine-by-twelve POINT play area — the whole game collapsed into a smudge
+    /// smaller than a fingernail. Rhythm Tap, Maze Runner and Star Tracer all
+    /// rendered as an empty grey rectangle on device, and Star Tracer's "0 of 4
+    /// joined" was the only clue that anything had been drawn at all.
+    ///
+    /// So the zero stays where exactness matters, and callers that need to DRAW
+    /// something ask for this instead. It is a typical modern iPhone held at
+    /// 30 cm: 460 ppi at scale 3 is 60.4 points per centimetre.
+    ///
+    /// Anything drawn with it is approximate, the ready screen already says so
+    /// in a caution banner, and the Progress screen's own rules stop an
+    /// approximate session from ever becoming a claimed trend.
+    static var approximate: CalibrationProfile {
+        CalibrationProfile(screenPointsPerCM: 60.4, viewingDistanceCM: 30)
+    }
+
+    /// This profile if it is usable, otherwise the documented stand-in.
+    ///
+    /// Call this at the point of DRAWING, never at the point of measuring.
+    var forDrawing: CalibrationProfile { isComplete ? self : .approximate }
+
     /// Inverse: what angle does this many points subtend?
     func degrees(forPoints points: Double) -> Double {
         guard isComplete, points > 0 else { return 0 }

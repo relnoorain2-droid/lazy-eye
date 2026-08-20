@@ -36,8 +36,13 @@ struct AssessmentView: View {
     @State private var runner: AssessmentRunner?
     @State private var saveError: String?
 
+    /// `forDrawing`, for the same reason as `ExerciseSessionScreen`: an
+    /// uncalibrated profile makes every angular size zero, and the check-in
+    /// would present a stimulus with no pixels in it. `CalibrationProfile()`
+    /// with no arguments is uncalibrated by default, so the old line produced
+    /// exactly that whenever a profile had never been measured.
     private var calibration: CalibrationProfile {
-        profile.calibration ?? CalibrationProfile()
+        (profile.calibration ?? CalibrationProfile()).forDrawing
     }
 
     var body: some View {

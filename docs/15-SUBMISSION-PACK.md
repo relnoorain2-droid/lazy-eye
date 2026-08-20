@@ -250,6 +250,15 @@ red-cyan glasses, the full progress history, and up to 5 family profiles.
 
 ## 7. WHAT IS STILL OUTSTANDING BEFORE SUBMITTING
 
+- [ ] **Terms of Use (EULA) link IN THE DESCRIPTION.** Not the paywall, not the
+      About screen — the App Store product page metadata. This is what rejection
+      1 was, and the app was already compliant everywhere else. See
+      `docs/17-REJECTION-1-EULA-LINK.md`. Append to the end of the description:
+
+          Terms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+          Privacy Policy: https://YOUR-DOMAIN/privacy-policy
+
+      Full URLs with `https://`. A bare domain fails the same automated check.
 - [ ] Create the three subscription products above.
 - [ ] Screenshots — `11-SCREENSHOTS-SPEC.md`. 6.9" and 13" are the required sizes.
 - [ ] Confirm the Support URL and Privacy Policy URL resolve (both were verified live in Phase 4;
